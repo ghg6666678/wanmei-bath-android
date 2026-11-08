@@ -309,9 +309,8 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <div class="sec-title"><h3>登录</h3></div>
     <section class="card">
       <div class="hint" style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:12px">
-        登录态失效时可以用手机号重新登录；退出后需要重新验证。
+        登录态失效时会自动弹出登录框，用手机号重新验证即可。
       </div>
-      <button class="btn ghost" style="width:100%;margin-bottom:9px" id="btnRelogin">重新登录</button>
       <button class="btn ghost" style="width:100%" id="btnLogout">退出登录</button>
     </section>
   </div>
@@ -1286,16 +1285,20 @@ $('#lgSubmit').onclick = async () => {
   }
 };
 
-$('#btnRelogin').onclick = openLogin;
-$('#btnLogout').onclick = async () => {
-  try {
-    await nativeCall('logout');
-    __autoLoginShown = true;   /* 主动退出，不要立刻再弹登录 */
-    toast('已退出登录');
-    $('#lgPhone').value = '';
-    $('#lgCode').value = '';
-    await loadAll();
-  } catch (e) { toast(e.message, true); }
+$('#btnLogout').onclick = () => {
+  askConfirm('退出登录',
+    '退出后会清除本机保存的登录信息，下次使用需要重新用手机号 + 短信验证码登录。',
+    '确认退出',
+    async () => {
+      try {
+        await nativeCall('logout');
+        __autoLoginShown = true;   /* 主动退出，不要立刻再弹登录 */
+        toast('已退出登录');
+        $('#lgPhone').value = '';
+        $('#lgCode').value = '';
+        await loadAll();
+      } catch (e) { toast(e.message, true); }
+    });
 };
 
 /* Android 返回键：先关弹层，再回首页，最后退出 */
