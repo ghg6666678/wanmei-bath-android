@@ -815,8 +815,12 @@ function openPicker(title, hint, options, current, cb) {
 function hostSheetHint() {}
 
 /* ---------- 消费限制 ---------- */
-const TIME_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 90, 120];
-const FARE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20];
+/* 可选项与官方 H5 完全一致：
+   限时 1–10 每分钟，之后每 5 分钟到 120；
+   限额 1–20 每元，另有 5000 表示不限额 */
+const TIME_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
+                   65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120];
+const FARE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 5000];
 
 async function saveSettings(timeMin, fareYuan) {
   try {
@@ -839,8 +843,8 @@ $('#rowTime').onclick = () => {
 
 $('#rowFare').onclick = () => {
   if (!state.settings || !state.settings.max_fare_limit) return toast('还没加载到当前设置', true);
-  openPicker('消费限额', '单次最高消费金额，从设备开阀后开始累计',
-    FARE_OPTS.map(v => ({v, label: v + ' 元'})),
+  openPicker('消费限额', '单次最高消费金额，从设备开阀后开始累计。选「不限」等于不设上限',
+    FARE_OPTS.map(v => ({v, label: v === 5000 ? '不限' : v + ' 元'})),
     (state.settings.max_fare_limit / 100),
     v => saveSettings(state.settings.max_time_limit || 30, parseFloat(v)));
 };

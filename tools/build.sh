@@ -97,6 +97,7 @@ if [ ! -f "$KS" ]; then
 fi
 
 "$BT/apksigner.bat" sign --ks "$KS" --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
+  --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
   --out "$OUT/bath.apk" "$OUT/app-aligned.apk" 2>&1 | tail -3
 
 echo ""

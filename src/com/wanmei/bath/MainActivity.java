@@ -348,7 +348,8 @@ public class MainActivity extends android.app.Activity {
                 int tmin = body.optInt("time", -1);
                 if (fare <= 0 || tmin <= 0) throw new Api.Fail("缺少参数");
                 if (tmin < 1 || tmin > 120) throw new Api.Fail("限时需在 1–120 分钟");
-                if (fare < 1 || fare > 20) throw new Api.Fail("限额需在 1–20 元");
+                // 与官方一致：1–20 元每元一档，5000 表示不限额
+                if (fare < 1 || (fare > 20 && fare != 5000)) throw new Api.Fail("限额需在 1–20 元，或选择「不限」");
                 boolean ok = api.saveSettings(fare, tmin);
                 JSONObject o = new JSONObject();
                 o.put("ok", ok);
