@@ -73,6 +73,19 @@ python tools/audit_apk.py --config ../web-app/config.json
 - **充值只给指引**：原版走微信小程序支付，微信对 `appid + 包名 + 签名` 三重校验，第三方调不起，所以页面上只提示「微信搜索小程序：完美校园」
 - 只有 Android 端；iOS 需要另做（协议层可复用）
 
+## 参考实现
+
+登录协议（RSA 换密钥 → 3DES 加密提交 → `campusSign` 签名）不是猜出来的，参考了以下公开实现：
+
+- **[ReaJason/17wanxiaoCheckin](https://github.com/ReaJason/17wanxiaoCheckin)** · MIT · 已归档
+  其 `login/` 目录（`campus.py`、`des_3.py`、`rsa_encrypt.py`、`sha1.py`）完整描述了登录握手过程，本项目的 Java 实现按这套流程独立重写。
+- **[fuqiuluo/wanxiao-campus](https://github.com/fuqiuluo/wanxiao-campus)** · Rust · 未声明许可证
+  用于交叉验证较新版本的登录流程与请求加密细节。
+
+用水业务协议（`entrance`、取码、限时限额、用水记录）来自官方 H5 前端 JavaScript 的协议还原，没有对应的开源项目。
+
+若本仓库中存在源自上述项目的代码片段，其版权归原作者所有，按 MIT 许可使用。
+
 ## 免责声明
 
 仅供个人学习与自用，请使用自己的账号。因使用本工具产生的一切后果由使用者自行承担。
