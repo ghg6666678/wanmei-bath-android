@@ -770,9 +770,10 @@ async function loadAll() {
       $('#orderCard').classList.add('hidden');
       $('#balNum').textContent = '—';
       $('#hSub').textContent = '';
-      /* 冷启动时登录态失效 —— 直接弹登录框，省掉用户一次点击 */
+      /* 登录态失效：先给一条明确提示，再弹登录框，避免打开 App 不知道发生了什么 */
       if (!__autoLoginShown) {
         __autoLoginShown = true;
+        if (logged) toast('登录失效，请重新登录', true);
         setTimeout(() => {
           const sh = $('#loginSheet');
           if (sh && !sh.classList.contains('on')) openLogin();
