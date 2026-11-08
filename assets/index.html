@@ -1023,7 +1023,7 @@ function limitPaint(touchInput) {
   }
   const ub = $('#numUnlimited');
   ub.classList.toggle('on', numCur.unlimitedOn);
-  ub.textContent = numCur.unlimitedOn ? '当前：不限额 · 点此恢复' : '设为不限额';
+  ub.textContent = numCur.unlimitedOn ? '设置限额' : '设为不限额';
   const e = $('#numErr');
   e.textContent = numCur.err || '';
   e.className = 'numerr' + (numCur.err ? (numCur.ok ? ' good' : ' bad') : '');
