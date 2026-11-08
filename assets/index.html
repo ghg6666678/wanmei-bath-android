@@ -116,6 +116,10 @@ nav svg{width:22px;height:22px}
   transform:translateY(102%);transition:transform .26s cubic-bezier(.32,.72,0,1);
   max-width:560px;margin:0 auto;max-height:88vh;overflow:auto}
 .sheet.on{transform:translateY(0)}
+/* 弹层打开时关掉背景毛玻璃：部分 Android WebView 在滑块拖动重绘时会把合成层画到弹层之上 */
+body.sheet-open{overflow:hidden}
+body.sheet-open header, body.sheet-open nav{backdrop-filter:none;-webkit-backdrop-filter:none}
+body.sheet-open .sheet{z-index:70}
 .sheet .bar-h{width:38px;height:4px;border-radius:99px;background:var(--line);margin:2px auto 14px}
 .sheet h3{margin:0 0 4px;font-size:17px}
 .sheet .hint{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.55}
@@ -483,6 +487,11 @@ function renderBalance() {
   else { p.className = 'pill'; p.textContent = '正常'; }
 }
 
+function onHomeTab() {
+  const b = document.querySelector('nav button[data-tab="home"]');
+  return !!b && b.classList.contains('on');
+}
+
 function renderOrder() {
   const card = $('#orderCard');
   clearInterval(cdTimer);
@@ -491,7 +500,8 @@ function renderOrder() {
     card.innerHTML = '';
     return;
   }
-  card.classList.remove('hidden');
+  /* 后台刷新不能在「我的」/「记录」页把验证码卡片翻出来 */
+  card.classList.toggle('hidden', !onHomeTab());
   card.style.padding = '0';
   card.innerHTML = state.orders.map((o, i) => {
     const fare = (Number(o.max_fare_limit || 0) / 100).toFixed(2).replace(/\.00$/, '');
@@ -1017,11 +1027,12 @@ $('#btnWx').onclick = () => {
 
 /* ---------- 弹层/导航 ---------- */
 function showSheet(sel) {
+  document.body.classList.add('sheet-open');
   $('#mask').classList.add('on');
   $(sel).classList.add('on');
 }
 function hideSheet() {
-  $('#mask').classList.remove('on');
+  document.body.classList.remove('sheet-open');
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('on'));
 }
 $('#mask').onclick = hideSheet;
@@ -1147,7 +1158,11 @@ window.__onShow = function () {
 
 loadAll();
 // 3 分钟一次即可：太密会把这个账号的用水会话打挂（实测高频请求会触发保护）
-setInterval(() => { if (!document.hidden) loadAll(); }, 180000);
+setInterval(() => {
+  if (document.hidden) return;
+  if (document.querySelector('.sheet.on')) return;   // 弹层开着，别重绘背景
+  loadAll();
+}, 180000);
 </script>
 </body>
 </html>
