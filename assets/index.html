@@ -306,15 +306,6 @@ input[type=tel]::placeholder{color:var(--ink3)}
       <div class="rec"><span>登录态</span><span class="r" id="meToken">—</span></div>
     </section>
 
-    <div class="sec-title"><h3>充值</h3></div>
-    <section class="card">
-      <div class="tipnote" style="margin:0">
-        本客户端只负责洗澡取码，不处理支付。<br>
-        充值请打开微信 → 搜索小程序<strong>「完美校园」</strong> → 首页点「充值」。
-      </div>
-      <button class="btn ghost" style="width:100%;margin-top:12px" id="btnWx">打开微信</button>
-    </section>
-
     <div class="sec-title"><h3>登录</h3></div>
     <section class="card">
       <div class="hint" style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:12px">
@@ -417,6 +408,20 @@ input[type=tel]::placeholder{color:var(--ink3)}
   <div style="display:flex;gap:9px;margin-top:12px">
     <button class="btn ghost" style="flex:1" id="numCancel">取消</button>
     <button class="btn" style="flex:1.4" id="numSave">保存</button>
+  </div>
+</div>
+
+<!-- 充值说明：由首页「充值」按钮唤起，「我的」页不再保留充值内容 -->
+<div class="sheet" id="paySheet">
+  <div class="bar-h"></div>
+  <h3>充值</h3>
+  <div class="hint">
+    本客户端只负责洗澡取码，不处理支付。<br>
+    充值请打开微信 → 搜索小程序<strong>「完美校园」</strong> → 首页点「充值」。
+  </div>
+  <div style="display:flex;gap:9px;margin-top:16px">
+    <button class="btn ghost" style="flex:1" id="payClose">关闭</button>
+    <button class="btn" style="flex:1.4" id="payWx">打开微信</button>
   </div>
 </div>
 
@@ -1108,8 +1113,10 @@ $('#rowFare').onclick = () => {
     v => saveSettings(state.settings.max_time_limit || 30, v));
 };
 
-/* ---------- 充值：只打开微信，不处理支付 ---------- */
-$('#btnWx').onclick = () => {
+/* ---------- 充值说明弹层：只给指引并打开微信，不处理支付 ---------- */
+$('#payClose').onclick = hideSheet;
+$('#payWx').onclick = () => {
+  hideSheet();
   if (__native()) __native().openUrl('weixin://');
   else location.href = 'weixin://';
   setTimeout(() => {
@@ -1220,15 +1227,7 @@ document.addEventListener('touchend', async () => {
   toast('已刷新');
 }, {passive: true});
 document.addEventListener('touchcancel', () => { if (!pullBusy) pullReset(); }, {passive: true});
-$('#btnRecharge').onclick = () => {
-  // 跳到「我的」页的充值区
-  const nav = document.querySelector('nav button[data-tab="me"]');
-  if (nav) nav.click();
-  setTimeout(() => {
-    const el = $('#amtGrid');
-    if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
-  }, 120);
-};
+$('#btnRecharge').onclick = () => showSheet('#paySheet');
 /* ---------- 登录 ---------- */
 let __lgTimer = null;
 let __autoLoginShown = false;   /* 冷启动自动弹一次登录；主动退出后不再自动弹 */
