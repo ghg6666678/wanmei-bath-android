@@ -867,28 +867,54 @@ function openPicker(title, hint, options, current, cb) {
 function hostSheetHint() {}
 
 /* ---------- 消费限制：滑块 + 文本框，金额以 0.05 元为步进 ---------- */
+/* 订单里存着取码当时的限时/限额：只改设置不重新取码，新数值不会生效。
+   所以保存成功后把所有已存在的预约撤销，让用户重新取码。 */
+async function revokeAllOrders() {
+  const orders = [], seen = new Set();
+  for (const o of (state.orders || [])) {
+    if (o && o.orderno && !seen.has(o.orderno)) { seen.add(o.orderno); orders.push(o); }
+  }
+  if (!orders.length) return null;
+  let done = 0, failed = 0;
+  for (const o of orders) {          /* 串行，避免短时间并发把会话打挂 */
+    try {
+      const j = await api('/api/cancel', {method: 'POST', body: JSON.stringify({orderno: o.orderno})});
+      if (j && j.ok === false) failed++; else done++;
+    } catch (e) { failed++; }
+  }
+  return {done, failed, total: orders.length};
+}
+
 async function saveSettings(timeMin, fareYuan) {
   try {
     const j = await api('/api/settings', {method: 'POST', body: JSON.stringify({
       time: timeMin, fare: fareYuan})});
-    toast(j.message || '已保存');
     state.settings = {max_time_limit: timeMin, max_fare_limit: Math.round(fareYuan * 100)};
     renderMe();
-    await loadAll();
+    await loadAll();                 /* 先拿最新预约列表 */
+    const r = await revokeAllOrders();
+    await loadAll();                 /* 再刷新界面，验证码卡片随之消失 */
+    if (r && r.total) {
+      toast(r.failed
+        ? `已保存，但 ${r.failed} 条旧预约取消失败（成功 ${r.done} 条），请检查后重新取码`
+        : `已保存，已取消 ${r.done} 条旧预约，请重新取码`, !!r.failed);
+    } else {
+      toast(j.message || '已保存（当前没有预约）');
+    }
   } catch (e) { toast(e.message, true); }
 }
 
 /* 内部一律用整数：时间=分钟，金额=分；step 也是整数，避免浮点误差 */
 const LIMIT_FIELDS = {
   time: {
-    title: '消费限时', hint: '单次最长使用时长，从设备开阀后开始累计',
+    title: '消费限时', hint: '单次最长使用时长，从设备开阀后开始累计；保存后会取消已有预约，需重新取码',
     min: 1, max: 120, step: 1, unit: '分钟', scale: 1, unlimited: 0,
     stepText: '1 分钟', placeholder: '1 – 120 的整数',
     bad: '只能填 1–120 的整数'
   },
   fare: {
     title: '消费限额',
-    hint: '单次最高消费金额，从设备开阀后开始累计。浴室按 0.05 元扣费，这里也只能按 0.05 元递增',
+    hint: '单次最高消费金额，按 0.05 元递增；保存后会取消已有预约，需重新取码',
     min: 100, max: 2000, step: 5, unit: '元', scale: 100, unlimited: 500000,
     stepText: '0.05 元', placeholder: '1.00 – 20.00，如 2.35',
     bad: '只能填 1.00–20.00 的数字，最多两位小数'
@@ -958,6 +984,7 @@ function openLimit(kind, value, onSave) {
   numCur.val = cfg.min + Math.round((v - cfg.min) / cfg.step) * cfg.step;
   $('#numTitle').textContent = cfg.title;
   $('#numHint').textContent = cfg.hint;
+  $('#numSave').textContent = (state.orders || []).length ? '保存并取消预约' : '保存';
   $('#numUnit').textContent = cfg.unit;
   $('#numInput').placeholder = cfg.placeholder;
   $('#numInput').setAttribute('inputmode', cfg.scale === 100 ? 'decimal' : 'numeric');
