@@ -185,11 +185,11 @@ public class Login {
                 + "\"netWork\":\"wifi\","
                 + "\"qudao\":\"tencent\","
                 + "\"requestMethod\":\"cam_iface46/registerUsersByTelAndLoginNew.action\","
-                + "\"shebeixinghao\":\"LGE-AN10\","
+                + "\"shebeixinghao\":\"" + jsonEsc(Api.deviceModel()) + "\","
                 + "\"sms\":\"" + code + "\","
                 + "\"systemType\":\"android\","
                 + "\"telephoneInfo\":\"12\","
-                + "\"telephoneModel\":\"LGE-AN10\","
+                + "\"telephoneModel\":\"" + jsonEsc(Api.deviceModel()) + "\","
                 + "\"wanxiaoVersion\":" + WX_VERSION
                 + "}";
         JSONObject r = signedPost("/campus/cam_iface46/registerUsersByTelAndLoginNew.action", p);
@@ -212,5 +212,11 @@ public class Login {
             String m = r.optString("message_", fallback);
             throw new Err(m.isEmpty() ? fallback : m);
         }
+    }
+
+    /** 机型等值拼进手写的 JSON 串前做一次转义，避免个别 ROM 的怪字符破坏报文 */
+    private static String jsonEsc(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

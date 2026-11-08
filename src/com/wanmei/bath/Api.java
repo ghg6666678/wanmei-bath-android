@@ -1,5 +1,6 @@
 package com.wanmei.bath;
 
+import android.os.Build;
 import android.util.Base64;
 
 import org.json.JSONArray;
@@ -34,10 +35,33 @@ public class Api {
 
     static final String BASE = "https://vwater.59wanmei.com/usewater";
     static final String H5_ORIGIN = "https://xqh5.17wanxiao.com";
-    static final String UA = "Mozilla/5.0 (Linux; Android 16; PJE110) AppleWebKit/537.36 "
-            + "(KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36 wanxiao/5.8.36";
+    static final String UA = "Mozilla/5.0 (Linux; Android " + androidVer() + "; " + deviceModel() + ")"
+            + " AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36 wanxiao/5.8.36";
     static final String SIGN_KEY = "wanmeixiaoyuan11";
     static final int LIMIT_BATH = 1;
+
+    /**
+     * 真实机型。去掉非 ASCII 字符，空格换成下划线——User-Agent 必须是 ASCII，
+     * 且空格会截断该字段。取不到时退回 "Android"。
+     */
+    static String deviceModel() {
+        String m = Build.MODEL == null ? "" : Build.MODEL.trim();
+        StringBuilder sb = new StringBuilder(m.length());
+        for (int i = 0; i < m.length(); i++) {
+            char c = m.charAt(i);
+            if (c >= 0x20 && c <= 0x7E) sb.append(c == ' ' ? '_' : c);
+        }
+        String out = sb.toString();
+        return out.isEmpty() ? "Android" : out;
+    }
+
+    /** 真实系统版本，例如 "16"、"14"。 */
+    static String androidVer() {
+        String v = Build.VERSION.RELEASE;
+        if (v == null) return "14";
+        v = v.trim();
+        return v.isEmpty() ? "14" : v;
+    }
 
     private String token = "";
     private String outid = "";
