@@ -407,7 +407,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <script>
 const $ = s => document.querySelector(s);
-const state = {orders: [], rooms: [], cfg: {}, settings: {}, balance: null, serverOffset: 0, pickedRoom: null, showAllRooms: false};
+const state = {orders: [], rooms: [], cfg: {}, settings: {}, balance: null, serverOffset: 0, pickedRoom: null};
 
 function toast(msg, err) {
   const t = $('#toast');
@@ -622,7 +622,6 @@ function renderStarBar() {
   if (!b) return;
   const star = getStar();
   if (!star) { b.textContent = '☆ 星标楼栋'; b.classList.remove('on'); }
-  else if (state.showAllRooms) { b.textContent = '◇ 全部宿舍楼'; b.classList.add('on'); }
   else { b.textContent = '★ ' + star; b.classList.add('on'); }
 }
 
@@ -636,18 +635,21 @@ function renderRooms() {
     const d = dormNo(a) - dormNo(b);
     return d !== 0 ? d : roomNo(a) - roomNo(b);
   });
-  if (star && !state.showAllRooms) rooms = rooms.filter(r => dormKey(r) === star);
+  if (star) rooms = rooms.filter(r => dormKey(r) === star);
 
   if (!rooms.length) {
     box.innerHTML = `<div class="empty">「${star}」暂时没有可用浴室<br>
-      <button class="btn ghost sm" id="btnShowAllEmpty" style="margin-top:12px">显示全部宿舍楼</button></div>`;
-    const eb = $('#btnShowAllEmpty');
-    if (eb) eb.onclick = () => { state.showAllRooms = true; renderRooms(); };
+      <button class="btn ghost sm" id="btnReselectDorm" style="margin-top:12px">重选楼栋</button></div>`;
+    const eb = $('#btnReselectDorm');
+    if (eb) eb.onclick = () => $('#btnStarDorm').click();
     return;
   }
 
   const myOrder = state.orders[0];
-  box.innerHTML = rooms.map(r => {
+  /* 还没星标时给一次引导：选完楼栋后列表就只剩这一栋 */
+  const guide = star ? '' :
+    '<div class="tipnote" style="margin:0 0 12px">先点上方「☆ 星标楼栋」选自己住的楼；之后列表只显示这一栋，同一栋的 A/B 区都会列出。</div>';
+  box.innerHTML = guide + rooms.map(r => {
     const free = r.freetermnums ?? 0, total = r.sumtermnums ?? 0;
     const pct = total ? Math.round(free / total * 100) : 0;
     const booked = myOrder && myOrder.bathroomcode === r.bathroomcode;
@@ -677,25 +679,20 @@ function renderRooms() {
       e.stopPropagation();
       const k = b.dataset.star;
       setStar(getStar() === k ? '' : k);
-      state.showAllRooms = false;
       renderRooms();
     };
   });
 }
 
-/* 选星标楼栋；「全部宿舍楼」是临时开关，星标本身保留，方便去别的宿舍洗浴 */
+/* 只按楼栋筛选：同一栋的 A/B 区都显示，别的楼不显示（也进不去） */
 $('#btnStarDorm').onclick = () => {
   const star = getStar();
-  const opts = [{v: '__all__', label: '全部宿舍楼'}];
-  dormList().forEach(k => opts.push({v: k, label: k}));
+  const opts = dormList().map(k => ({v: k, label: k}));
   if (star) opts.push({v: '__none__', label: '取消星标'});
-  const cur = state.showAllRooms ? '__all__' : (star || '');
   openPicker('星标宿舍楼',
-    '选一个楼栋后只显示它的浴室；同名 A/B 区算同一栋。需要去别的宿舍时选「全部宿舍楼」，星标会保留。',
-    opts, cur, v => {
-      if (v === '__all__') state.showAllRooms = true;
-      else if (v === '__none__') { setStar(''); state.showAllRooms = false; }
-      else { setStar(v); state.showAllRooms = false; }
+    '选自己住的宿舍楼，列表只显示这一栋；同一栋的 A/B 区都会显示，某个区设备坏了可以去另一个区。',
+    opts, star || '', v => {
+      setStar(v === '__none__' ? '' : v);
       renderRooms();
     }, 2);
 };
