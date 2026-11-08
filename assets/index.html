@@ -40,8 +40,6 @@ header{
   display:grid;place-items:center;color:#fff;font-weight:700;font-size:16px;box-shadow:var(--shadow)}
 h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
 .sub{font-size:12px;color:var(--ink2);margin-top:1px}
-.iconbtn{border:0;background:var(--card);color:var(--ink2);width:34px;height:34px;border-radius:12px;
-  display:grid;place-items:center;box-shadow:var(--shadow);font-size:16px}
 main{padding:4px 16px 8px;display:flex;flex-direction:column;gap:14px}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;border:1px solid var(--line)}
 
@@ -222,6 +220,13 @@ input[type=tel]{width:100%;padding:13px 14px;border-radius:13px;border:1.5px sol
 input[type=tel]::placeholder{color:var(--ink3)}
 /* 深色背景下 45% 的黑遮罩几乎看不出层次，加深一点 */
 .sheet-mask{background:rgba(0,0,0,.62)}
+/* 下拉刷新提示条：放在 header 与 main 之间，高度随手势变化把内容自然下推 */
+#pullHint{height:0;opacity:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  gap:8px;font-size:12.5px;color:var(--ink2);transition:height .18s ease,opacity .18s ease;
+  user-select:none;-webkit-user-select:none}
+#pullHint .spin{width:14px;height:14px;border:2px solid rgba(37,99,235,.2);
+  border-top-color:var(--brand);display:none}
+#pullHint.busy .spin{display:inline-block}
 </style>
 </head>
 <body>
@@ -234,8 +239,10 @@ input[type=tel]::placeholder{color:var(--ink3)}
       <div class="sub" id="hSub">正在连接…</div>
     </div>
   </div>
-  <button class="iconbtn" id="btnRefresh" title="刷新">↻</button>
 </header>
+
+<!-- 不放在 main 内：tab 切换依赖 main.children[0] 是余额卡片 -->
+<div id="pullHint" aria-hidden="true"><span class="spin"></span><span id="pullText">下拉刷新</span></div>
 
 <main>
   <!-- 余额 -->
@@ -1155,7 +1162,64 @@ document.querySelectorAll('nav button').forEach(b => {
   };
 });
 
-$('#btnRefresh').onclick = () => { toast('刷新中…'); loadAll(); };
+/* ---------- 下拉刷新（替代右上角那个太细的刷新按钮） ---------- */
+const PULL_TRIGGER = 70;   /* 手指实际下拉的像素阈值 */
+let pullY0 = 0, pullRaw = 0, pullOn = false, pullBusy = false;
+
+function pullReset() {
+  const h = $('#pullHint');
+  h.style.transition = '';
+  h.style.height = '0px';
+  h.style.opacity = '0';
+  h.classList.remove('busy');
+  $('#pullText').textContent = '下拉刷新';
+  pullRaw = 0; pullOn = false;
+}
+function pullAllowed(e) {
+  if (pullBusy || document.querySelector('.sheet.on')) return false;
+  if (window.scrollY > 0) return false;
+  const t = e.target;
+  /* 滑块、输入框、弹层内部不接管手势 */
+  if (t && t.closest && t.closest('.sheet, input, textarea, select')) return false;
+  return true;
+}
+document.addEventListener('touchstart', e => {
+  pullOn = false; pullRaw = 0;
+  if (!pullAllowed(e) || !e.touches || e.touches.length !== 1) return;
+  pullY0 = e.touches[0].clientY;
+  pullOn = true;
+}, {passive: true});
+document.addEventListener('touchmove', e => {
+  if (!pullOn || pullBusy || !e.touches || e.touches.length !== 1) return;
+  const dy = e.touches[0].clientY - pullY0;
+  if (dy <= 0 || window.scrollY > 0) { pullReset(); return; }
+  if (e.cancelable) e.preventDefault();       /* 阻止 WebView 默认的越界回弹 */
+  pullRaw = dy;
+  const h = $('#pullHint');
+  const d = Math.min(dy * 0.5, 80);
+  h.style.transition = 'none';
+  h.style.height = d + 'px';
+  h.style.opacity = String(Math.min(1, d / 36));
+  $('#pullText').textContent = dy >= PULL_TRIGGER ? '松开刷新' : '下拉刷新';
+}, {passive: false});
+document.addEventListener('touchend', async () => {
+  if (!pullOn || pullBusy) return;
+  const trigger = pullRaw >= PULL_TRIGGER;
+  pullOn = false;
+  if (!trigger) { pullReset(); return; }
+  pullBusy = true;
+  const h = $('#pullHint');
+  h.style.transition = '';
+  h.classList.add('busy');
+  h.style.height = '44px';
+  h.style.opacity = '1';
+  $('#pullText').textContent = '刷新中…';
+  try { await loadAll(); } catch (e) { }
+  pullBusy = false;
+  pullReset();
+  toast('已刷新');
+}, {passive: true});
+document.addEventListener('touchcancel', () => { if (!pullBusy) pullReset(); }, {passive: true});
 $('#btnRecharge').onclick = () => {
   // 跳到「我的」页的充值区
   const nav = document.querySelector('nav button[data-tab="me"]');
