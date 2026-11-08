@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 水滴主体 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z" />
+
+    <!-- 内部高光 -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"
+        android:fillAlpha="0.55" />
+</vector>
