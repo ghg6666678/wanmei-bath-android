@@ -162,6 +162,30 @@ input:focus{border-color:var(--brand)}
 .picklist button{padding:12px 0;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);
   color:var(--ink);font-size:14px;font-weight:600;font-family:inherit}
 .picklist button.on{border-color:var(--brand);color:var(--brand);background:rgba(37,99,235,.08)}
+/* 消费限制：滑块 + 文本框联动 */
+.rgval{text-align:center;margin:4px 0 0;font-size:36px;font-weight:800;color:var(--brand);
+  font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1.2}
+.rgval small{font-size:14px;font-weight:600;color:var(--ink2);margin-left:5px;letter-spacing:0}
+.rgticks{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink3);margin-top:7px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:99px;
+  margin:18px 0 0;outline:none;background:linear-gradient(90deg,var(--brand) var(--pct,30%),var(--line) var(--pct,30%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;
+  background:#fff;border:3px solid var(--brand);box-shadow:0 2px 10px rgba(0,0,0,.28);cursor:pointer}
+input[type=range]:disabled{opacity:.3}
+input[type=text]:disabled{opacity:.45}
+.numinline{display:flex;align-items:center;gap:10px;margin-top:16px}
+.numinline label{font-size:12.5px;color:var(--ink2);font-weight:600;white-space:nowrap}
+.numinline input[type=text]{flex:1;min-width:0;text-align:center;font-size:19px;font-weight:700;
+  font-variant-numeric:tabular-nums;padding:11px 8px}
+.numinline .unit{flex:none;font-size:13px;color:var(--ink2);font-weight:600}
+.numerr{font-size:12px;color:var(--ink3);margin-top:8px;min-height:18px;line-height:1.4}
+.numerr.bad{color:#d92d20}
+.numerr.good{color:var(--brand)}
+@media (prefers-color-scheme:dark){
+  input[type=range]::-webkit-slider-thumb{background:#1b2533}
+  .numerr.bad{color:#ff8a80}
+  .numerr.good{color:#8ab4f8}
+}
 .monthpick{font-size:12px;color:var(--brand);font-weight:600;padding:4px 10px;border-radius:99px;
   line-height:1.25;background:rgba(37,99,235,.08);cursor:pointer;border:0;font-family:inherit}
 /* 记录页标题行带胶囊按钮，需要比默认（负边距）更宽松的间距，否则会贴到卡片上 */
@@ -351,6 +375,27 @@ input[type=tel]::placeholder{color:var(--ink3)}
   <h3 id="pickTitle">选择</h3>
   <div class="hint" id="pickHint"></div>
   <div class="picklist" id="pickList"></div>
+</div>
+
+<!-- 消费限时 / 限额：滑块 + 文本框联动 -->
+<div class="sheet" id="numSheet">
+  <div class="bar-h"></div>
+  <h3 id="numTitle">消费限时</h3>
+  <div class="hint" id="numHint"></div>
+  <div class="rgval"><span id="numBig">30</span><small id="numBigUnit">分钟</small></div>
+  <input type="range" id="numRange" min="1" max="120" step="1" value="30">
+  <div class="rgticks"><span id="numMin">1 分钟</span><span id="numMax">120 分钟</span></div>
+  <div class="numinline">
+    <label for="numInput">直接输入</label>
+    <input type="text" id="numInput" inputmode="decimal" autocomplete="off" placeholder="">
+    <span class="unit" id="numUnit">分钟</span>
+  </div>
+  <div class="numerr" id="numErr"></div>
+  <button class="btn ghost sm" id="numUnlimited" style="display:none;width:100%;margin-top:4px">设为不限额</button>
+  <div style="display:flex;gap:9px;margin-top:12px">
+    <button class="btn ghost" style="flex:1" id="numCancel">取消</button>
+    <button class="btn" style="flex:1.4" id="numSave">保存</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -604,7 +649,8 @@ function renderMe() {
   $('#meToken').textContent = state.cfg.hasToken ? '有效' : '缺失';
   const st = state.settings || {};
   $('#valTime').textContent = st.max_time_limit ? st.max_time_limit + ' 分钟' : '—';
-  $('#valFare').textContent = st.max_fare_limit ? (st.max_fare_limit / 100) + ' 元' : '—';
+  const fareFen = Number(st.max_fare_limit || 0);
+  $('#valFare').textContent = fareFen ? (fareFen >= 500000 ? '不限' : (fareFen / 100) + ' 元') : '—';
 }
 
 async function loadAll() {
@@ -814,14 +860,7 @@ function openPicker(title, hint, options, current, cb) {
 
 function hostSheetHint() {}
 
-/* ---------- 消费限制 ---------- */
-/* 可选项与官方 H5 完全一致：
-   限时 1–10 每分钟，之后每 5 分钟到 120；
-   限额 1–20 每元，另有 5000 表示不限额 */
-const TIME_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
-                   65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120];
-const FARE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 5000];
-
+/* ---------- 消费限制：滑块 + 文本框，金额以 0.05 元为步进 ---------- */
 async function saveSettings(timeMin, fareYuan) {
   try {
     const j = await api('/api/settings', {method: 'POST', body: JSON.stringify({
@@ -833,20 +872,138 @@ async function saveSettings(timeMin, fareYuan) {
   } catch (e) { toast(e.message, true); }
 }
 
+/* 内部一律用整数：时间=分钟，金额=分；step 也是整数，避免浮点误差 */
+const LIMIT_FIELDS = {
+  time: {
+    title: '消费限时', hint: '单次最长使用时长，从设备开阀后开始累计',
+    min: 1, max: 120, step: 1, unit: '分钟', scale: 1, unlimited: 0,
+    stepText: '1 分钟', placeholder: '1 – 120 的整数',
+    bad: '只能填 1–120 的整数'
+  },
+  fare: {
+    title: '消费限额',
+    hint: '单次最高消费金额，从设备开阀后开始累计。浴室按 0.05 元扣费，这里也只能按 0.05 元递增',
+    min: 100, max: 2000, step: 5, unit: '元', scale: 100, unlimited: 500000,
+    stepText: '0.05 元', placeholder: '1.00 – 20.00，如 2.35',
+    bad: '只能填 1.00–20.00 的数字，最多两位小数'
+  }
+};
+let numCur = null;
+
+function limitFmt(cfg, v) {
+  return cfg.scale === 100 ? (v / 100).toFixed(2) : String(v);
+}
+function limitParse(cfg, s) {
+  const t = String(s).trim();
+  if (cfg.scale === 100) {
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+    return Math.round(Number(t) * 100);
+  }
+  if (!/^\d+$/.test(t)) return null;
+  return Number(t);
+}
+function limitPaint(touchInput) {
+  if (!numCur) return;
+  const cfg = numCur.cfg, v = numCur.val, r = $('#numRange'), box = $('#numInput');
+  r.min = cfg.min; r.max = cfg.max; r.step = cfg.step;
+  r.value = String(v);
+  r.style.setProperty('--pct', ((v - cfg.min) / (cfg.max - cfg.min) * 100) + '%');
+  r.disabled = numCur.unlimitedOn;
+  box.disabled = numCur.unlimitedOn;
+  if (numCur.unlimitedOn) {
+    $('#numBig').textContent = '不限';
+    $('#numBigUnit').textContent = '';
+    if (touchInput) box.value = '不限';
+  } else {
+    $('#numBig').textContent = limitFmt(cfg, v);
+    $('#numBigUnit').textContent = cfg.unit;
+    /* 输入非法时保留用户原文和红字提示，别静默改回旧值再提交 */
+    if (touchInput && numCur.ok) box.value = limitFmt(cfg, v);
+  }
+  const ub = $('#numUnlimited');
+  ub.classList.toggle('on', numCur.unlimitedOn);
+  ub.textContent = numCur.unlimitedOn ? '当前：不限额 · 点此恢复' : '设为不限额';
+  const e = $('#numErr');
+  e.textContent = numCur.err || '';
+  e.className = 'numerr' + (numCur.err ? (numCur.ok ? ' good' : ' bad') : '');
+}
+function limitReadInput(normalize) {
+  if (!numCur) return;
+  const cfg = numCur.cfg;
+  const v = limitParse(cfg, $('#numInput').value);
+  if (v === null || v < cfg.min || v > cfg.max) {
+    numCur.ok = false;
+    numCur.err = cfg.bad;
+  } else {
+    let q = cfg.min + Math.round((v - cfg.min) / cfg.step) * cfg.step;
+    q = Math.min(Math.max(q, cfg.min), cfg.max);
+    numCur.ok = true;
+    numCur.err = q === v ? '' : ('按 ' + cfg.stepText + '就近取整 → ' + limitFmt(cfg, q) + ' ' + cfg.unit);
+    numCur.val = q;
+    numCur.unlimitedOn = false;
+  }
+  limitPaint(normalize);
+}
+function openLimit(kind, value, onSave) {
+  const cfg = LIMIT_FIELDS[kind];
+  numCur = {cfg, onSave, val: cfg.min, err: '', ok: true,
+            unlimitedOn: cfg.unlimited > 0 && Number(value) >= cfg.unlimited};
+  const v = Math.min(Math.max(Number(value) || cfg.min, cfg.min), cfg.max);
+  numCur.val = cfg.min + Math.round((v - cfg.min) / cfg.step) * cfg.step;
+  $('#numTitle').textContent = cfg.title;
+  $('#numHint').textContent = cfg.hint;
+  $('#numUnit').textContent = cfg.unit;
+  $('#numInput').placeholder = cfg.placeholder;
+  $('#numInput').setAttribute('inputmode', cfg.scale === 100 ? 'decimal' : 'numeric');
+  $('#numMin').textContent = limitFmt(cfg, cfg.min) + ' ' + cfg.unit;
+  $('#numMax').textContent = limitFmt(cfg, cfg.max) + ' ' + cfg.unit;
+  $('#numUnlimited').style.display = cfg.unlimited ? '' : 'none';
+  limitPaint(true);
+  showSheet('#numSheet');
+}
+
+$('#numRange').oninput = () => {
+  if (!numCur) return;
+  numCur.unlimitedOn = false;
+  numCur.ok = true;
+  numCur.err = '';
+  numCur.val = Number($('#numRange').value);
+  limitPaint(true);
+};
+$('#numInput').oninput = () => limitReadInput(false);
+$('#numInput').onblur = () => limitReadInput(true);
+$('#numUnlimited').onclick = () => {
+  if (!numCur) return;
+  numCur.unlimitedOn = !numCur.unlimitedOn;
+  numCur.ok = true;
+  numCur.err = '';
+  limitPaint(true);
+};
+$('#numCancel').onclick = () => { numCur = null; hideSheet(); };
+$('#numSave').onclick = () => {
+  if (!numCur) return;
+  if (!numCur.unlimitedOn) {
+    limitReadInput(true);
+    if (!numCur.ok) return;
+  }
+  const cfg = numCur.cfg;
+  const v = numCur.unlimitedOn ? cfg.unlimited : numCur.val;
+  const cb = numCur.onSave;
+  numCur = null;
+  hideSheet();
+  cb(cfg.scale === 100 ? v / 100 : v);
+};
+
 $('#rowTime').onclick = () => {
   if (!state.settings || !state.settings.max_time_limit) return toast('还没加载到当前设置', true);
-  openPicker('消费限时', '单次最长使用时长，从设备开阀后开始累计',
-    TIME_OPTS.map(v => ({v, label: v + ' 分'})),
-    state.settings.max_time_limit,
-    v => saveSettings(parseInt(v), (state.settings.max_fare_limit || 200) / 100));
+  openLimit('time', state.settings.max_time_limit,
+    v => saveSettings(v, (state.settings.max_fare_limit || 200) / 100));
 };
 
 $('#rowFare').onclick = () => {
   if (!state.settings || !state.settings.max_fare_limit) return toast('还没加载到当前设置', true);
-  openPicker('消费限额', '单次最高消费金额，从设备开阀后开始累计。选「不限」等于不设上限',
-    FARE_OPTS.map(v => ({v, label: v === 5000 ? '不限' : v + ' 元'})),
-    (state.settings.max_fare_limit / 100),
-    v => saveSettings(state.settings.max_time_limit || 30, parseFloat(v)));
+  openLimit('fare', state.settings.max_fare_limit,
+    v => saveSettings(state.settings.max_time_limit || 30, v));
 };
 
 /* ---------- 充值：只打开微信，不处理支付 ---------- */

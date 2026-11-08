@@ -394,12 +394,13 @@ public class Api {
         return out;
     }
 
-    public synchronized boolean saveSettings(double fareYuan, int timeMin) throws Exception {
+    /** fareFen 单位为分：浴室按 0.05 元扣费，合法值都是 5 的倍数。 */
+    public synchronized boolean saveSettings(int fareFen, int timeMin) throws Exception {
         JSONObject extra = new JSONObject();
         extra.put("outid", outid);
         extra.put("timestamp", ts14());
         extra.put("limittype", LIMIT_BATH);
-        extra.put("max_fare_limit", (int) Math.round(fareYuan * 100));
+        extra.put("max_fare_limit", fareFen);
         extra.put("max_time_limit", timeMin);
         JSONObject d = invoke("zfbsavelimit", extra, true);
         cachedLimit = null;

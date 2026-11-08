@@ -348,9 +348,14 @@ public class MainActivity extends android.app.Activity {
                 int tmin = body.optInt("time", -1);
                 if (fare <= 0 || tmin <= 0) throw new Api.Fail("缺少参数");
                 if (tmin < 1 || tmin > 120) throw new Api.Fail("限时需在 1–120 分钟");
-                // 与官方一致：1–20 元每元一档，5000 表示不限额
-                if (fare < 1 || (fare > 20 && fare != 5000)) throw new Api.Fail("限额需在 1–20 元，或选择「不限」");
-                boolean ok = api.saveSettings(fare, tmin);
+                // 统一换算成「分」做整数判断，避免 0.05 这类值的浮点误差
+                long fen = Math.round(fare * 100);
+                // 5000 元（500000 分）是官方的「不限额」
+                if (fen < 100 || (fen > 2000 && fen != 500000))
+                    throw new Api.Fail("限额需在 1.00–20.00 元，或选择「不限」");
+                if (fen != 500000 && fen % 5 != 0)
+                    throw new Api.Fail("金额需为 0.05 元的整数倍（如 2.35）");
+                boolean ok = api.saveSettings((int) fen, tmin);
                 JSONObject o = new JSONObject();
                 o.put("ok", ok);
                 o.put("message", ok ? "已保存" : "保存失败");
