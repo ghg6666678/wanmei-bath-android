@@ -92,6 +92,10 @@ main{padding:4px 16px 8px;display:flex;flex-direction:column;gap:14px}
 .pinbtn svg{width:18px;height:18px}
 .pinbtn.on{color:var(--brand);opacity:1}
 .pinmark{font-size:10px;font-weight:600;color:var(--brand);background:rgba(37,99,235,.12);padding:1px 5px;border-radius:5px;flex:none}
+.pinbtn.on svg{fill:currentColor}
+.starpick{font-size:12px;font-weight:600;color:var(--brand);padding:4px 10px;border-radius:99px;
+  line-height:1.25;background:rgba(37,99,235,.08);cursor:pointer;border:0;font-family:inherit;white-space:nowrap}
+.starpick.on{background:var(--brand);color:#fff}
 
 /* 底部导航 */
 nav{
@@ -237,9 +241,10 @@ input[type=tel]::placeholder{color:var(--ink3)}
   <section id="orderCard" class="card order hidden"></section>
 
   <!-- 宿舍楼 -->
-  <div class="sec-title">
+  <div class="sec-title" style="gap:8px">
     <h3>选择浴室</h3>
-    <span style="font-size:11.5px;color:var(--ink3)" id="srvTime"></span>
+    <button class="starpick" id="btnStarDorm">☆ 星标楼栋</button>
+    <span style="font-size:11.5px;color:var(--ink3);margin-left:auto" id="srvTime"></span>
   </div>
   <section class="card" id="roomList"><div class="empty">加载中…</div></section>
 
@@ -402,7 +407,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <script>
 const $ = s => document.querySelector(s);
-const state = {orders: [], rooms: [], cfg: {}, settings: {}, balance: null, serverOffset: 0, pickedRoom: null};
+const state = {orders: [], rooms: [], cfg: {}, settings: {}, balance: null, serverOffset: 0, pickedRoom: null, showAllRooms: false};
 
 function toast(msg, err) {
   const t = $('#toast');
@@ -556,8 +561,8 @@ function startCountdown() {
   cdTimer = setInterval(tick, 30000);
 }
 
-/* 浴室列表：按编号数字升序；置顶的排最前（置顶项存在 localStorage） */
-const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 17v5"/><path d="M9 4h6v6.5l2 3.5H7l2-3.5V4z"/></svg>';
+/* 星标宿舍楼：同一栋楼的 a 区 / b 区合并，只显示星标楼栋的浴室 */
+const STAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l2.8 5.7 6.3.9-4.6 4.4 1.1 6.3L12 17.5l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 3.2z"/></svg>';
 
 function roomNo(r) {
   const m = String(r.bathroomcode || '').match(/\d+/);
@@ -581,53 +586,79 @@ function dormNo(r) {
   const a = s.match(/(\d+)\s*号/);
   return a ? parseInt(a[1], 10) : 99999;
 }
-/* 置顶项优先存进原生（WebView 的 file:// 页面里 localStorage 不保证可用），
-   浏览器里自动回落到 localStorage */
-function getPin() {
-  if (typeof Android !== 'undefined' && Android.getPinRoom) {
-    try { return Android.getPinRoom() || ''; } catch (e) { }
+/* 星标楼栋存进原生（file:// 页面里 localStorage 不保证可用），浏览器回落到 localStorage */
+function getStar() {
+  if (typeof Android !== 'undefined' && Android.getStarDorm) {
+    try { return Android.getStarDorm() || ''; } catch (e) { }
   }
-  try { return localStorage.getItem('pinRoom') || ''; } catch (e) { return ''; }
+  try { return localStorage.getItem('starDorm') || ''; } catch (e) { return ''; }
 }
-function setPin(code) {
-  if (typeof Android !== 'undefined' && Android.setPinRoom) {
-    try { Android.setPinRoom(code || ''); return; } catch (e) { }
+function setStar(v) {
+  if (typeof Android !== 'undefined' && Android.setStarDorm) {
+    try { Android.setStarDorm(v || ''); return; } catch (e) { }
   }
   try {
-    if (code) localStorage.setItem('pinRoom', code);
-    else localStorage.removeItem('pinRoom');
+    if (v) localStorage.setItem('starDorm', v);
+    else localStorage.removeItem('starDorm');
   } catch (e) { }
 }
-function togglePin(code) {
-  const c = String(code);
-  setPin(getPin() === c ? '' : c);
-  renderRooms();
+/* 「一号宿舍a区」「一号宿舍b区」→ 同一栋「一号宿舍」 */
+function dormKey(r) {
+  const s = String(r.bathroomname || '').trim();
+  return s.replace(/[\s(（]*[aAbB]\s*[区栋座]?\s*[)）]?\s*$/, '').trim() || s;
+}
+function dormList() {
+  const map = new Map();
+  (state.rooms || []).forEach(r => {
+    const k = dormKey(r);
+    if (k && !map.has(k)) map.set(k, dormNo(r));
+  });
+  return [...map.entries()]
+    .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], 'zh'))
+    .map(e => e[0]);
+}
+function renderStarBar() {
+  const b = $('#btnStarDorm');
+  if (!b) return;
+  const star = getStar();
+  if (!star) { b.textContent = '☆ 星标楼栋'; b.classList.remove('on'); }
+  else if (state.showAllRooms) { b.textContent = '◇ 全部宿舍楼'; b.classList.add('on'); }
+  else { b.textContent = '★ ' + star; b.classList.add('on'); }
 }
 
 function renderRooms() {
   const box = $('#roomList');
+  renderStarBar();
   if (!state.rooms.length) { box.innerHTML = '<div class="empty">没有可用浴室</div>'; return; }
 
-  const pin = getPin();
-  const rooms = state.rooms.slice().sort((a, b) => {
+  const star = getStar();
+  let rooms = state.rooms.slice().sort((a, b) => {
     const d = dormNo(a) - dormNo(b);
     return d !== 0 ? d : roomNo(a) - roomNo(b);
   });
-  const pi = rooms.findIndex(r => String(r.bathroomcode) === pin);
-  if (pi > 0) rooms.unshift(rooms.splice(pi, 1)[0]);
+  if (star && !state.showAllRooms) rooms = rooms.filter(r => dormKey(r) === star);
+
+  if (!rooms.length) {
+    box.innerHTML = `<div class="empty">「${star}」暂时没有可用浴室<br>
+      <button class="btn ghost sm" id="btnShowAllEmpty" style="margin-top:12px">显示全部宿舍楼</button></div>`;
+    const eb = $('#btnShowAllEmpty');
+    if (eb) eb.onclick = () => { state.showAllRooms = true; renderRooms(); };
+    return;
+  }
 
   const myOrder = state.orders[0];
   box.innerHTML = rooms.map(r => {
     const free = r.freetermnums ?? 0, total = r.sumtermnums ?? 0;
     const pct = total ? Math.round(free / total * 100) : 0;
     const booked = myOrder && myOrder.bathroomcode === r.bathroomcode;
-    const isPin = String(r.bathroomcode) === pin;
+    const k = dormKey(r);
+    const isStar = !!star && k === star;
     return `<div class="room">
       <div class="grow">
         <div class="name">
           <span>${r.bathroomname}</span>
-          ${isPin ? '<span class="pinmark">置顶</span>' : ''}
-          <button class="pinbtn${isPin ? ' on' : ''}" data-pin="${r.bathroomcode}" aria-label="置顶">${PIN_SVG}</button>
+          ${isStar ? '<span class="pinmark">★ 星标</span>' : ''}
+          <button class="pinbtn${isStar ? ' on' : ''}" data-star="${k}" aria-label="星标此楼">${STAR_SVG}</button>
         </div>
         <div class="info">空闲 <b style="color:var(--ok)">${free}</b> / ${total} · 空闲率 ${pct}%</div>
         <div class="bar"><i style="width:${pct}%"></i></div>
@@ -641,10 +672,33 @@ function renderRooms() {
   box.querySelectorAll('button[data-code]').forEach(b => {
     b.onclick = () => openBook(b.dataset.code);
   });
-  box.querySelectorAll('button[data-pin]').forEach(b => {
-    b.onclick = (e) => { e.stopPropagation(); togglePin(b.dataset.pin); };
+  box.querySelectorAll('button[data-star]').forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const k = b.dataset.star;
+      setStar(getStar() === k ? '' : k);
+      state.showAllRooms = false;
+      renderRooms();
+    };
   });
 }
+
+/* 选星标楼栋；「全部宿舍楼」是临时开关，星标本身保留，方便去别的宿舍洗浴 */
+$('#btnStarDorm').onclick = () => {
+  const star = getStar();
+  const opts = [{v: '__all__', label: '全部宿舍楼'}];
+  dormList().forEach(k => opts.push({v: k, label: k}));
+  if (star) opts.push({v: '__none__', label: '取消星标'});
+  const cur = state.showAllRooms ? '__all__' : (star || '');
+  openPicker('星标宿舍楼',
+    '选一个楼栋后只显示它的浴室；同名 A/B 区算同一栋。需要去别的宿舍时选「全部宿舍楼」，星标会保留。',
+    opts, cur, v => {
+      if (v === '__all__') state.showAllRooms = true;
+      else if (v === '__none__') { setStar(''); state.showAllRooms = false; }
+      else { setStar(v); state.showAllRooms = false; }
+      renderRooms();
+    }, 2);
+};
 
 function renderMe() {
   const pe = $('#mePhone');
@@ -847,9 +901,10 @@ $('#recMonth').onclick = () => {
 /* ---------- 通用选择器 ---------- */
 let pickCb = null;
 
-function openPicker(title, hint, options, current, cb) {
+function openPicker(title, hint, options, current, cb, cols) {
   $('#pickTitle').textContent = title;
   $('#pickHint').textContent = hint || '';
+  $('#pickList').style.gridTemplateColumns = 'repeat(' + (cols || 4) + ',1fr)';
   $('#pickList').innerHTML = options.map(o =>
     `<button data-v="${o.v}" class="${String(o.v) === String(current) ? 'on' : ''}">${o.label}</button>`).join('');
   pickCb = cb;

@@ -245,7 +245,7 @@ public class MainActivity extends android.app.Activity {
             }
         }
 
-        /** 置顶的浴室编号（用原生存储，file:// 页面里 localStorage 不保证可用） */
+        /** 旧版「置顶」接口，保留以兼容已存数据 */
         @JavascriptInterface
         public String getPinRoom() {
             return getSharedPreferences("bath", MODE_PRIVATE).getString("pinRoom", "");
@@ -255,6 +255,18 @@ public class MainActivity extends android.app.Activity {
         public void setPinRoom(String code) {
             getSharedPreferences("bath", MODE_PRIVATE).edit()
                     .putString("pinRoom", code == null ? "" : code).apply();
+        }
+
+        /** 星标宿舍楼（楼栋名，不含 A/B 区），存原生避免 file:// 下 localStorage 失效 */
+        @JavascriptInterface
+        public String getStarDorm() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("starDorm", "");
+        }
+
+        @JavascriptInterface
+        public void setStarDorm(String name) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("starDorm", name == null ? "" : name).apply();
         }
     }
 
