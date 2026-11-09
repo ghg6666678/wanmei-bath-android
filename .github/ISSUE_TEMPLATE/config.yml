@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用前必读：单点登录与适用范围
+    url: https://github.com/ghg6666678/wanmei-bath-android#适用范围与其他学校
+    about: 登录会让原版 App 下线；目前只在一所学校实测，其他学校请看适配说明
+  - name: 下载最新版本
+    url: https://github.com/ghg6666678/wanmei-bath-android/releases
+    about: 获取 APK 与发布说明

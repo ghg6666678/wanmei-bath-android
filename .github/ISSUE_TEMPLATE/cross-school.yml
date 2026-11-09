@@ -1,0 +1,82 @@
+name: 跨校适配反馈
+description: 在其他学校试用后，反馈能否使用、浴室命名与扣费规则有什么不同
+title: "[适配] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢帮忙验证其他学校的适配情况。
+
+        目前只在一所使用「完美校园 智慧用水」的学校实测过。协议层是通用的，但浴室命名、扣费单位和部分业务参数可能各校不同。
+
+        **请不要粘贴手机号、学号、姓名、短信验证码、token/session 或完整的登录返回内容** —— issue 是公开可见的。浴室名称可以贴；截图请先打码。
+  - type: input
+    id: school
+    attributes:
+      label: 学校 / 系统
+      description: 学校名可写简称；关键是说明用的是哪套系统
+      placeholder: 例如：某大学 · 完美校园「智慧用水 → 洗澡」
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: 总体结果
+      options:
+        - 完全可用（登录、取码、设置都正常）
+        - 能登录能取码，但部分功能不对
+        - 登录失败
+        - 取码失败
+        - 安装 / 启动失败
+    validations:
+      required: true
+  - type: textarea
+    id: rooms
+    attributes:
+      label: 浴室名称样例
+      description: 请贴 3–5 个「选择浴室」列表里的完整名称，用来校准楼栋排序与星标分组
+      placeholder: |
+        一号宿舍a区
+        一号宿舍b区
+        二号宿舍a区
+      render: plain
+    validations:
+      required: false
+  - type: input
+    id: unit
+    attributes:
+      label: 扣费单位
+      description: 浴室实际每次扣费的最小金额；不清楚可填「不清楚」
+      placeholder: 例如 0.05 元 / 0.01 元 / 不清楚
+    validations:
+      required: false
+  - type: input
+    id: limits
+    attributes:
+      label: 官方可选的限额 / 限时档位
+      description: 原版小程序里消费限额、消费限时有哪些选项，用于校准范围
+      placeholder: 例如 限额 1–20 元、限时 1–120 分钟、有「不限」选项
+    validations:
+      required: false
+  - type: textarea
+    id: detail
+    attributes:
+      label: 具体表现
+      description: 哪里不对、有没有报错提示、保存设置是否被拒；可附打码截图
+      placeholder: 描述复现步骤与实际结果
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 使用的版本
+      placeholder: 例如 1.0.2
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认没有粘贴任何个人信息、验证码、token 或完整登录返回内容
+          required: true
