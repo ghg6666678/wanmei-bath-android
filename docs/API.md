@@ -655,3 +655,105 @@ App 与网页端都会查 GitHub，通道与降级顺序见 [DEVELOPMENT.md 8.4]
 - **只在一所学校实测**：`customerCode` / `customerid` / `outid` 不是写死的，由登录返回；但浴室命名、扣费单位、限额档位可能因校而异。
 - **不要高频请求**：会话与设备会被风控，实测高频调用会触发保护。本项目的刷新间隔是 3 分钟，另有 30 秒防抖。
 - 本文档只描述协议，**不含任何账号、票据或个人信息的真实值**。
+
+---
+
+# G. 蓝牙水控（未实现，可行性已确认）
+
+前面 B 节说的「预约浴室」是**联网 + 验证码**开阀。但官方的「宿舍淋浴」在部分学校是**蓝牙水控**：手机直接连水控器，写指令开阀、关阀、结算。
+
+本项目**还没有实现**这条路径（没有设备可测），但协议已经摸清，结论是：**可行，且比预想简单**。下面是依据与落地条件。
+
+## G.1 三个关键事实
+
+**① 官方的蓝牙 JS 不实现蓝牙，只是个转发层**
+
+`wmxy-js-bluetooth-api-v2.0.0.js` 里 20 个方法（`openBluetoothAdapter`、`createBLEConnection`、`writeBLECharacteristicValue`…）全是同一套模板，最终都走：
+
+```js
+invokeNativeMethod(methodName, params) {
+  if (!this.browser.isIphone()) {
+    window.wanxiao_bluetooth.executeBindMethod(methodName, params);
+  } else {
+    window.webkit.messageHandlers[methodName].postMessage(params);
+  }
+}
+```
+
+也就是说，官方 App 里有一个原生对象 `wanxiao_bluetooth` 在干实事。Android 上照做即可——这层壳不需要逆向。
+
+**② 加密不在客户端，指令由服务器下发**
+
+开阀指令不是本地算出来的，而是向服务器要一段十六进制字节，手机原样写给设备：
+
+```js
+bleApi: function (t, e) {
+  var i = { method: t.cmd, param: JSON.stringify(t) };
+  V.post("/api/use/water/h5/blueInvokFront", i)
+}
+// 调用处：
+this.$http.bleApi({cmd: "GetKey", ...}, function (res) {
+  res.result ? this._write(res.result, cb) : this.connectError("权限认证出现错误")
+})
+```
+
+鉴权、报文生成全在服务端。客户端只负责「问字节 → 写设备 → 把设备回包再问一次」。这比逆向一套私有加密算法容易一个量级。
+
+**③ BLE 参数是固定常量**
+
+| 项 | 值 |
+| --- | --- |
+| 服务 UUID | `0000FF12-0000-1000-8000-00805F9B34FB`（短写 `FF12`） |
+| 写特征值 | `0000FF01-0000-1000-8000-00805F9B34FB`（`FF01`） |
+| 通知特征值 | `0000FF02-0000-1000-8000-00805F9B34FB`（`FF02`） |
+
+## G.2 端到端流程
+
+官方 H5 的状态机（`addDevice.vue` → `deviceConnect.vue`）：
+
+| 步骤 | 动作 | 说明 |
+| --- | --- | --- |
+| 1 | 扫描 | `startBluetoothDevicesDiscovery`，可按服务 UUID 过滤，默认 15 秒超时 |
+| 2 | 连接 | `createBLEConnection` → 订阅 `FF02` 通知 |
+| 3 | `GetKey` | 请求字节 → 写 `FF01`，设备回通知（日志里叫「8001，交换密钥」） |
+| 4 | `GetNotiResult` | 把通知原文回传，拿到 `R2` / `authenticationRandom` / `poscode` / `status` |
+| 5 | `GetLog` | 查询设备上是否有未上传的离线消费记录 |
+| 6 | `recordUploadResult` | 逐条把记录回写设备（确认已上传） |
+| 7 | `EditWaterTerm` | 首次使用：把设备绑定到账号（`poscode` 十六进制转整数） |
+| 8 | `WaterPayRequest` | **平台下单**，返回 `retcode=100` + `totermdata` + 余额 `oddfare` |
+| 9 | `order` | 请求开阀字节 → 写设备；带 `limitTime` / `limitMoney`（补零到 4 位的十六进制） |
+| 10 | `keepConnecting` / `GetControlStatus` | 使用中保活与状态轮询（定时器） |
+| 11 | `EndConsumption` | 关阀，设备回本次消费金额 `amount` |
+| 12 | `WaterPayCommit` | 上传消费记录 → `recordUploadResult` 回写 → 断开 |
+
+## G.3 用到的接口
+
+| 接口 | 用途 | 鉴权 |
+| --- | --- | --- |
+| `POST /usewater/api/use/water/h5/blueInvokFront` | 蓝牙指令生成（`method` + `param`） | 代码里没带 `encrypt` 头，疑似靠 entrance 的会话 cookie |
+| `POST /usewater/api/use/water/h5/WXInvokFront/` | `WaterPayRequest`、`WaterPayCommit`、`EditWaterTerm` 等 | 同 B.2 的签名 |
+
+`blueInvokFront` 的命令：`GetKey`、`GetNotiResult`、`GetLog`、`recordUploadResult`、`keepConnecting`、`order`、`GetControlStatus`、`EndConsumption`。
+
+## G.4 落地条件与风险
+
+**必须有的：**
+
+- 一台真实的、本校的蓝牙水控器。没有硬件，这一步无法验证——协议外壳可以写，但「字节对不对」只能靠设备回包确认。
+- 运行时权限：Android 12+ 需要 `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT`；Android 11 及以下扫描还需要定位权限。本项目目前只有 `INTERNET` 与 `ACCESS_NETWORK_STATE`，**加蓝牙意味着权限清单变长**，这会削弱「权限极简」这个卖点。
+- 首次使用要先绑定设备（`EditWaterTerm`），设备归属可能跟房间/账号绑定。
+
+**风险：**
+
+- 计费走的是「平台下单 + 设备离线记账」两条线，任何一步错位都可能出现「开了阀但没扣到钱」或「扣了钱但阀没开」，比验证码模式更敏感。
+- 蓝牙水控是**防蹭用**设计（挑战-响应 + `poscode` 绑定），如果设备已被别人绑定，可能直接拒绝。
+- 没有官方文档，所有字段含义来自压缩后的 JS，命名（`acccode:216`、`scene_info:"蓝牙水控ant_mini"`）只能照抄，理解有限。
+
+## G.5 如果要做，建议的顺序
+
+1. **只做扫描**：加权限、扫出周围设备的名称/服务 UUID，确认能看见 `FF12` 的水控器（不做任何写入）。这一步零风险，也能验证「本部确实是蓝牙水控」。
+2. **做握手只读**：`GetKey` → 写 → 收通知 → `GetNotiResult`，确认能走通鉴权、拿到 `poscode`。仍然不开阀。
+3. **托管给官方页面**：把官方的蓝牙页面（`bluetooth/*.vue`、`shower/*.vue`）连同 `wmxy-js-bluetooth-api` 一起塞进 WebView，用原生实现 `wanxiao_bluetooth` 桥。这样业务逻辑完全复用官方代码，只需要写 BLE 传输层——工作量最小、最不容易出错。
+4. 最后才考虑用 Java 重写整个状态机。
+
+> 第 3 条其实是性价比最高的：官方 JS 已经把状态机写好了，我们缺的只是一个 `executeBindMethod` 的实现（Android BLE 大约 300 行）。但这样等于把官方页面打包进来，跟「精简客户端」的定位有冲突，需要权衡。
