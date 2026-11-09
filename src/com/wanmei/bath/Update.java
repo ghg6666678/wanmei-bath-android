@@ -94,8 +94,14 @@ public class Update {
                 "https://api.github.com/repos/" + REPO + "/releases/latest"));
         probes.add(new Source(KIND_API, "GitHub 代理镜像",
                 "https://ghproxy.cn/https://api.github.com/repos/" + REPO + "/releases/latest"));
+        // jsDelivr 有多个 CDN 节点：主节点（Fastly）对分支文件缓存长达 12 小时，
+        // 刚发版后仍会返回旧版本；备用节点与 raw 都是即时生效的，所以一起探测，取版本号最高的。
         probes.add(new Source(KIND_MANIFEST, "jsDelivr CDN",
                 "https://cdn.jsdelivr.net/gh/" + REPO + "@main/latest.json"));
+        probes.add(new Source(KIND_MANIFEST, "jsDelivr 备用节点",
+                "https://gcore.jsdelivr.net/gh/" + REPO + "@main/latest.json"));
+        probes.add(new Source(KIND_MANIFEST, "jsDelivr 国内节点",
+                "https://jsd.onmicrosoft.cn/gh/" + REPO + "@main/latest.json"));
         probes.add(new Source(KIND_MANIFEST, "raw 直连",
                 "https://raw.githubusercontent.com/" + REPO + "/main/latest.json"));
 
