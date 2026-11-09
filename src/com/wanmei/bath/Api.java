@@ -28,8 +28,9 @@ import javax.crypto.spec.SecretKeySpec;
  *
  * 逆向来源：xqh5.17wanxiao.com/water3to1 前端 JS
  *   POST https://vwater.59wanmei.com/usewater/api/use/water/h5/WXInvokFront/
- *   签名：AES-ECB-PKCS7( uuid + "-" + timestamp_ms , key = "wanmeixiaoyuan11" )
- *         放在请求头 encrypt，配合 uuid / timestamp
+ *   签名：AES-ECB-PKCS7( uuid + "-" + timestamp_ms , 16 字节固定密钥 / 标准 AES-128 )
+ *         密钥是官方前端 JS 里的明文常量；Java 的 AES/ECB/PKCS5Padding 与前端 PKCS7 等价
+ *         输出 base64 放在请求头 encrypt，配合 uuid / timestamp
  */
 public class Api {
 
@@ -37,7 +38,7 @@ public class Api {
     static final String H5_ORIGIN = "https://xqh5.17wanxiao.com";
     static final String UA = "Mozilla/5.0 (Linux; Android " + androidVer() + "; " + deviceModel() + ")"
             + " AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36 wanxiao/5.8.36";
-    static final String SIGN_KEY = "wanmeixiaoyuan11";
+    static final String SIGN_KEY = "wanmeixiaoyuan11";   // 16 字节标准 AES-128，取自官方 H5 前端明文常量
     static final int LIMIT_BATH = 1;
 
     /**
