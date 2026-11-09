@@ -406,8 +406,9 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | 1.0.0 | `zhishui-1.0.0.apk` | 45,832 B | 1 |
 | 1.0.1 | `zhishui-1.0.1.apk` | 49,928 B | 2 |
 | 1.0.2 | `zhishui-1.0.2.apk` | 49,928 B | 3 |
+| 1.0.3 | `zhishui-1.0.3.apk` | 62,280 B | 4 |
 
-三个版本的 Release 均已发布并附带 APK 与发布说明；两个仓库的 `main` 与三个版本标签一致。README 里另有「适用范围与其他学校」章节，仓库配有 issue 模板用于收集跨校适配反馈。
+四个版本的 Release 均已发布并附带 APK 与发布说明；两个仓库的 `main` 与版本标签一致。README 里另有「适用范围与其他学校」章节，仓库配有 issue 模板用于收集跨校适配反馈。
 
 **构建**（在安卓仓库目录下）
 

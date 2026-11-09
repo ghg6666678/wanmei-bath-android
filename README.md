@@ -114,7 +114,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 ## 开发复盘
 
-从最初的构想到 1.0.2 的完整流程、关键决策和踩过的坑，见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。这是**公开版**，已剥离账号凭据、个人信息、本机环境细节，以及客户端代码保护相关的可复现步骤；含完整细节的原始复盘不对外发布。
+从最初的构想到 1.0.3 的完整流程、关键决策和踩过的坑，见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。这是**公开版**，已剥离账号凭据、个人信息、本机环境细节，以及客户端代码保护相关的可复现步骤；含完整细节的原始复盘不对外发布。
 
 ## 免责声明
 
