@@ -432,7 +432,7 @@ public class MainActivity extends android.app.Activity {
 
             JSONObject o = new JSONObject();
             o.put("ok", ok);
-            o.put("message", ok ? "取码成功" : r.optString("message", "预约失败"));
+            o.put("message", ok ? "预约成功" : r.optString("message", "预约失败"));
             o.put("data", data == null ? new JSONObject() : data);
             o.put("verificationcode", vcode);
             return o;
@@ -460,7 +460,7 @@ public class MainActivity extends android.app.Activity {
         throw new Api.Fail("未知接口: " + path);
     }
 
-    /** 用服务端下发的 HHMMSS 生成本次取码时间（秒置 0，避开本地时钟偏差） */
+    /** 用服务端下发的 HHMMSS 生成本次预约时间（秒置 0，避开本地时钟偏差） */
     private static String nowFromServer(String hhmmss) {
         Date now = new Date();
         String ymd = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(now);

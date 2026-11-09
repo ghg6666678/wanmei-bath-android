@@ -9,8 +9,8 @@
 - 手机号 + 短信验证码登录（登录后不再依赖原版 App）
 - 余额、当前预约（验证码 + 当日有效的失效倒计时）
 - 浴室列表按宿舍号排序；可星标自己住的宿舍楼，列表只显示该楼浴室（A/B 区合并为同一栋，某个区设备坏了可去同楼另一区）
-- 一键取码 / 取消预约
-- 消费限时、限额设置：滑块 + 文本框联动；金额按浴室实际扣费的 0.05 元一档递增；保存后自动取消已有预约（订单带取码时的数值，不重新取码不生效）
+- 一键预约 / 取消预约
+- 消费限时、限额设置：滑块 + 文本框联动；金额按浴室实际扣费的 0.05 元一档递增；保存后自动取消已有预约（订单带预约时的数值，不重新预约不生效）
 - 最近 6 个月用水记录
 - 深色模式自适应
 - 下拉刷新：在页面顶部下拉即可手动更新余额与预约
@@ -21,7 +21,7 @@
 AndroidManifest.xml
 src/com/wanmei/bath/
     MainActivity.java   WebView 容器 + JS 桥 + 页面路由
-    Api.java            智慧用水协议（AES-ECB 签名、entrance、取码、记录、限时限额）
+    Api.java            智慧用水协议（AES-ECB 签名、entrance、预约、记录、限时限额）
     Login.java          登录协议（RSA 换密钥 + 3DES + campusSign）
     Store.java          SharedPreferences 读写
 assets/index.html       界面（HTML + JS，走原生桥调 Java）
@@ -62,7 +62,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 - **登录拿到的 session 就是用水接口要的 token**：先 `exchangeSecretkey` 换密钥得到 session，再用同一 session 提交短信验证码，服务端把它升格为账号会话
 - 每次请求带三个头：`uuid`、`timestamp`（毫秒）、`encrypt`（把 `uuid-时间戳` 用 AES-ECB + PKCS7 加密后 base64）
 - 签名密钥是官方 H5 前端 JS 里的 **16 字节明文常量**（标准 AES-128，见 `SIGN_KEY`）；Java 的 `AES/ECB/PKCS5Padding` 与前端 PKCS7 填充等价，两端都用各自语言的原生实现，不需要 Node.js
-- 取码时间用**服务端返回的时间**计算，不用本机时钟——原版 App 的「预约时间不能早于当前时间」报错，根因就是它拿本地时间当默认值又拿本地时间做比较
+- 预约时间用**服务端返回的时间**计算，不用本机时钟——原版 App 的「预约时间不能早于当前时间」报错，根因就是它拿本地时间当默认值又拿本地时间做比较
 - 权限只有 `INTERNET` 和 `ACCESS_NETWORK_STATE`，无 Service / Receiver / Provider，`allowBackup=false`
 
 ## 隐私
@@ -82,7 +82,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 > **目前只在一所使用「完美校园 智慧用水」的学校实测通过。** 其他学校欢迎试用并反馈，但不保证开箱可用。
 
-协议层基本是通用的：三个服务域名（`vwater.59wanmei.com`、`xqh5.17wanxiao.com`、`app.17wanxiao.com`）都是完美校园的公共服务，签名密钥是官方公共 H5 前端里的固定常量（16 字节、标准 AES-128）；`customerCode`、`customerid`、`outid` 等学校/账号标识**不是写死的**，由短信登录返回，并在 `entrance()` 时被服务端下发的参数覆盖。所以别校用户用自己的账号登录，主流程（登录、余额、取码、取消、记录）大概率能直接跑。
+协议层基本是通用的：三个服务域名（`vwater.59wanmei.com`、`xqh5.17wanxiao.com`、`app.17wanxiao.com`）都是完美校园的公共服务，签名密钥是官方公共 H5 前端里的固定常量（16 字节、标准 AES-128）；`customerCode`、`customerid`、`outid` 等学校/账号标识**不是写死的**，由短信登录返回，并在 `entrance()` 时被服务端下发的参数覆盖。所以别校用户用自己的账号登录，主流程（登录、余额、预约、取消、记录）大概率能直接跑。
 
 但以下三处是按本校实际情况固化的，换学校可能需要调整：
 
@@ -105,7 +105,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 - **[fuqiuluo/wanxiao-campus](https://github.com/fuqiuluo/wanxiao-campus)** · Rust · 未声明许可证
   用于交叉验证较新版本的登录流程与请求加密细节。
 
-用水业务协议（`entrance`、取码、限时限额、用水记录）来自官方 H5 前端 JavaScript 的协议还原，没有对应的开源项目。
+用水业务协议（`entrance`、预约、限时限额、用水记录）来自官方 H5 前端 JavaScript 的协议还原，没有对应的开源项目。
 
 若本仓库中存在源自上述项目的代码片段，其版权归原作者所有，按 MIT 许可使用。
 
