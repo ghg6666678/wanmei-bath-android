@@ -12,6 +12,7 @@
 - 一键预约 / 取消预约
 - 消费限时、限额设置：滑块 + 文本框联动；金额按浴室实际扣费的 0.05 元一档递增；保存后自动取消已有预约（订单带预约时的数值，不重新预约不生效）
 - 最近 6 个月用水记录
+- **检查更新**：多通道探测 GitHub（官方接口 → 代理镜像 → CDN 清单 → APK 内置清单 → 上次缓存），GitHub 打不开时也照样能给出最新版本、下载地址与 SHA-256；新版 APK 可一键交给系统下载器
 - 深色模式自适应
 - 下拉刷新：在页面顶部下拉即可手动更新余额与预约
 
@@ -24,7 +25,9 @@ src/com/wanmei/bath/
     Api.java            智慧用水协议（AES-ECB 签名、entrance、预约、记录、限时限额）
     Login.java          登录协议（RSA 换密钥 + 3DES + campusSign）
     Store.java          SharedPreferences 读写
+    Update.java         检查更新（多通道探测 + 内置清单/缓存兜底）
 assets/index.html       界面（HTML + JS，走原生桥调 Java）
+assets/latest.json      版本清单（断网时也知道最新版本与下载地址）
 res/                    主题、颜色、图标
 tools/
     build.sh            手工构建 APK（不依赖 Gradle）

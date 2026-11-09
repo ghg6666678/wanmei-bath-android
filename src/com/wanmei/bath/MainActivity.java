@@ -232,6 +232,89 @@ public class MainActivity extends android.app.Activity {
             runOnUiThread(() -> handleScheme(url));
         }
 
+        /** 用系统浏览器打开（下载页、镜像、项目主页），不占用 App 自己的 WebView */
+        @JavascriptInterface
+        public void openExternal(String url) {
+            if (url == null || url.trim().isEmpty()) return;
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                    i.addCategory(Intent.CATEGORY_BROWSABLE);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception ignored) { }
+            });
+        }
+
+        /** 复制文本（校验码、下载链接） */
+        @JavascriptInterface
+        public void copyText(String text) {
+            if (text == null) return;
+            try {
+                android.content.ClipboardManager cm =
+                        (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("bath", text));
+            } catch (Exception ignored) { }
+        }
+
+        /**
+         * 直接把新版本 APK 下载到手机（系统下载器）。
+         * 不指定保存目录，落在系统共享下载缓存里，由通知引导安装，不需要存储权限。
+         */
+        @JavascriptInterface
+        public void downloadApk(String id, String url, String fileName) {
+            new Thread(() -> {
+                try {
+                    if (url == null || url.trim().isEmpty()) throw new IllegalStateException("下载地址为空");
+                    android.app.DownloadManager dm =
+                            (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                    if (dm == null) throw new IllegalStateException("系统没有下载服务");
+                    String name = (fileName == null || fileName.trim().isEmpty())
+                            ? "zhishui.apk" : fileName.trim();
+                    android.app.DownloadManager.Request req =
+                            new android.app.DownloadManager.Request(Uri.parse(url.trim()));
+                    req.setTitle("智水 " + name);
+                    req.setDescription("正在下载新版本 APK");
+                    req.setMimeType("application/vnd.android.package-archive");
+                    req.setNotificationVisibility(
+                            android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    req.setAllowedNetworkTypes(
+                            android.app.DownloadManager.Request.NETWORK_MOBILE
+                                    | android.app.DownloadManager.Request.NETWORK_WIFI);
+                    long did = dm.enqueue(req);
+                    JSONObject o = new JSONObject();
+                    o.put("ok", true);
+                    o.put("message", "已加入下载队列，完成后点通知安装");
+                    o.put("data", String.valueOf(did));
+                    post(id, o.toString());
+                } catch (Exception e) {
+                    post(id, err(msg(e)));
+                }
+            }).start();
+        }
+
+        /** 当前安装的版本号，取自安装包本身，不是前端写死的 */
+        @JavascriptInterface
+        public String appVersion() {
+            return appVersionObj().toString();
+        }
+
+        /**
+         * 检查更新。GitHub 不通时由 Update 内部回落（内置清单 + 缓存），
+         * 这里只负责把结果回传，前端统一按同一份 JSON 结构渲染。
+         */
+        @JavascriptInterface
+        public void checkUpdateAsync(String id) {
+            new Thread(() -> {
+                try {
+                    JSONObject r = new Update().check(MainActivity.this, appVersionObj());
+                    post(id, r.toString());
+                } catch (Exception e) {
+                    post(id, err(msg(e)));
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public String deviceInfo() {
             try {
@@ -268,6 +351,22 @@ public class MainActivity extends android.app.Activity {
             getSharedPreferences("bath", MODE_PRIVATE).edit()
                     .putString("starDorm", name == null ? "" : name).apply();
         }
+    }
+
+    /** 安装包自身的版本信息，取不到时给兜底值，不让前端拿到空对象。 */
+    private JSONObject appVersionObj() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("version", "1.0.0");
+            o.put("versionCode", 0);
+            android.content.pm.PackageInfo pi =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            String vn = pi.versionName;
+            if (vn != null && !vn.isEmpty()) o.put("version", vn);
+            int vc = Build.VERSION.SDK_INT >= 28 ? (int) pi.getLongVersionCode() : pi.versionCode;
+            o.put("versionCode", vc);
+        } catch (Exception ignored) { }
+        return o;
     }
 
     private static String firstNonEmpty(JSONObject o, String... keys) {
