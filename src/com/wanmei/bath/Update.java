@@ -48,10 +48,20 @@ public class Update {
     private static final int KIND_API = 0;    // GitHub Release 接口
     private static final int KIND_MANIFEST = 1; // latest.json 清单
 
-    /** 下载镜像模板：把 GitHub 直链套进去即可，避免用户手动拼。 */
-    private static final String[] MIRRORS = {
-            "https://ghfast.top/%s",
-            "https://ghproxy.cn/%s",
+    /**
+     * 下载加速：只走 jsDelivr 这类有企业背书的 CDN，**绝不内置免费代理域名**。
+     *
+     * <p>2026-11 实测教训：ghproxy.cn 在移动网络下会把下载跳转到色情站点。免费代理域名
+     * 随时可能被抢注或劫持，把用户导向哪里完全不受我们控制。这类域名一律不进代码——
+     * 宁可少一条通道，也不能让「检查更新」变成跳板。
+     *
+     * <p>路径依赖：APK 需要同时提交到仓库的 release/ 目录，并用版本 tag 固定，
+     * 这样 CDN 拿到的就是这一版，不会因为分支缓存返回旧文件。
+     */
+    private static final String[] CDNS = {
+            "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
+            "https://gcore.jsdelivr.net/gh/%s@v%s/release/%s",
+            "https://jsd.onmicrosoft.cn/gh/%s@v%s/release/%s",
     };
 
     private static final class Source {
@@ -92,8 +102,8 @@ public class Update {
         List<Source> probes = new ArrayList<>();
         probes.add(new Source(KIND_API, "GitHub 官方接口",
                 "https://api.github.com/repos/" + REPO + "/releases/latest"));
-        probes.add(new Source(KIND_API, "GitHub 代理镜像",
-                "https://ghproxy.cn/https://api.github.com/repos/" + REPO + "/releases/latest"));
+        // 曾经这里有一条 ghproxy.cn 的镜像通道，2026-11 因该域名跳转色情站点已删除。
+        // 免费代理一律不再进入代码，见 CDNS 上的注释。
         // jsDelivr 有多个 CDN 节点：主节点（Fastly）对分支文件缓存长达 12 小时，
         // 刚发版后仍会返回旧版本；备用节点与 raw 都是即时生效的，所以一起探测，取版本号最高的。
         probes.add(new Source(KIND_MANIFEST, "jsDelivr CDN",
@@ -205,7 +215,11 @@ public class Update {
             }
             if (!latest.has("mirrors")) {
                 JSONArray ms = new JSONArray();
-                if (!apk.isEmpty()) for (String m : MIRRORS) ms.put(m.replace("%s", apk));
+                String name = latest.optString("apkName", "");
+                // 只有「仓库里有这个 APK」时才有 CDN 地址可拼；Release 资产 CDN 取不到。
+                if (!ver.isEmpty() && !name.isEmpty()) {
+                    for (String t : CDNS) ms.put(String.format(t, REPO, ver, name));
+                }
                 latest.put("mirrors", ms);
             }
         } catch (Exception ignored) { }
