@@ -45,6 +45,8 @@ public class Update {
     private static final long TOTAL_WAIT = 6000L;
     /** 缓存有效期：7 天。 */
     private static final long CACHE_TTL = 7L * 24 * 3600 * 1000;
+    /** 完整 Markdown 原文的上限，防止异常大的正文把内存和流量撑爆。 */
+    private static final int NOTE_MD_MAX = 20000;
     /** 更新日志摘要的字符上限：够放下要点，再长就让弹层滚动。 */
     private static final int NOTE_MAX = 3000;
     /** 统一的 UA，探测与拉取保持一致。 */
@@ -345,7 +347,11 @@ public class Update {
         JSONObject o = new JSONObject();
         o.put("version", ver);
         o.put("publishedAt", j.optString("published_at", j.optString("created_at", "")));
-        o.put("notes", summarize(j.optString("body", "")));
+        String body = j.optString("body", "");
+        o.put("notes", summarize(body));
+        /* 完整 Markdown 原文也带上，前端直接渲染成 HTML。
+           notes 是给旧客户端准备的纯文本摘要，两份并存谁都不吃亏。 */
+        o.put("notesMd", body.length() > NOTE_MD_MAX ? body.substring(0, NOTE_MD_MAX) : body);
 
         JSONArray assets = j.optJSONArray("assets");
         if (assets != null) {
