@@ -488,7 +488,18 @@ public class MainActivity extends android.app.Activity {
                 int amp = month.indexOf('&');
                 if (amp >= 0) month = month.substring(0, amp);
             }
-            JSONObject d = api.records(month, 1);
+            // 分页：前端按「记录页」的触底加载传 page，默认第 1 页
+            int page = 1;
+            int pi = path.indexOf("page=");
+            if (pi >= 0) {
+                String pv = path.substring(pi + 5);
+                int amp = pv.indexOf('&');
+                if (amp >= 0) pv = pv.substring(0, amp);
+                try {
+                    page = Math.max(1, Integer.parseInt(pv.trim()));
+                } catch (Exception ignored) { }
+            }
+            JSONObject d = api.records(month, page);
             JSONObject o = new JSONObject();
             o.put("ok", true);
             o.put("data", d.opt("data"));

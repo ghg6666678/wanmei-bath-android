@@ -140,7 +140,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 ## 其他设计稿
 
-- [消费记录的本地缓存与增量刷新](docs/RECORDS_CACHE.md) —— 设计稿，未实现
+- [消费记录的分页与缓存策略](docs/RECORDS_CACHE.md) —— 为什么不做落盘、只做内存复用
 
 ## 接口文档
 
