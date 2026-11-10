@@ -203,13 +203,18 @@ App 端把 A、B 用 Java 实现（`Login.java` / `Api.java`），不经过 C；
 ```json
 {
   "ok": true,
-  "current": {"version":"1.0.3","versionCode":0},
+  "current": {"version":"1.1.0","versionCode":0},
   "latest": {
-    "version":"1.0.3","publishedAt":"2026-11-09T11:38:15Z",
-    "notes":"...","apkName":"zhishui-1.0.3.apk",
-    "apkUrl":"https://github.com/.../zhishui-1.0.3.apk",
-    "sha256":"3e8e1008...","mirrors":["https://ghfast.top/...","https://ghproxy.cn/..."],
-    "releaseUrl":"https://github.com/.../releases/tag/v1.0.3"
+    "version":"1.1.0","publishedAt":"2026-11-10T03:37:44Z",
+    "notes":"...","apkName":"zhishui-1.1.0.apk",
+    "apkUrl":"https://github.com/.../zhishui-1.1.0.apk",
+    "sha256":"a6f8e6f0...",
+    "mirrors":[
+      "https://cdn.jsdelivr.net/gh/...@v1.1.0/release/zhishui-1.1.0.apk",
+      "https://gcore.jsdelivr.net/gh/...@v1.1.0/release/zhishui-1.1.0.apk"
+    ],
+    "downloads":[{"url":"https://cdn.jsdelivr.net/...","ok":true,"ms":1204,"kind":"cdn"}],
+    "releaseUrl":"https://github.com/.../releases/tag/v1.1.0"
   },
   "source": "GitHub 官方接口",
   "stale": false,
@@ -238,12 +243,19 @@ App 与网页端都会查 GitHub，通道与降级顺序见 [DEVELOPMENT.md 8.4]
 | 用途 | 地址 |
 | --- | --- |
 | 最新 Release（权威） | `https://api.github.com/repos/ghg6666678/wanmei-bath-android/releases/latest` |
-| 同上，代理镜像 | `https://ghproxy.cn/https://api.github.com/repos/.../releases/latest` |
 | 版本清单 | `https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@main/latest.json` |
-| 同上，备用节点 | `https://gcore.jsdelivr.net/gh/...`、`https://jsd.onmicrosoft.cn/gh/...` |
+| 同上，备用节点 | `https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@main/latest.json` |
 | 同上，raw | `https://raw.githubusercontent.com/ghg6666678/wanmei-bath-android/main/latest.json` |
-| APK 下载 | `https://github.com/ghg6666678/wanmei-bath-android/releases/download/v<版本>/zhishui-<版本>.apk` |
-| APK 镜像 | `https://ghfast.top/<上面的直链>`、`https://ghproxy.cn/<上面的直链>` |
+| APK（Release 资产） | `https://github.com/ghg6666678/wanmei-bath-android/releases/download/v<版本>/zhishui-<版本>.apk` |
+| APK（CDN，按 tag 定位） | `https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v<版本>/release/zhishui-<版本>.apk` |
+
+**不使用任何第三方加速代理。** 2026-11 曾引入过 `ghproxy.cn`、`ghfast.top` 和 `jsd.onmicrosoft.cn`，三个都已移除：
+
+- `ghproxy.cn` 在移动网络下会跳转色情站点（1.0.3 因此被撤回）；
+- `ghfast.top` 拒绝 API 路径，且同属不受控的免费代理；
+- `jsd.onmicrosoft.cn` 实测是 **301 跳到 `raw.githubusercontent.com`**，本身不存内容，而 raw 在国内比 github 更难访问——它连「国内节点」这个名分都不成立。
+
+判断一个「加速域名」是否可信，只看两件事：**响应头是 200 还是 30x**，以及 **`Server` 是 CDN 还是反代**。剩下的说法都不算数。
 
 ---
 

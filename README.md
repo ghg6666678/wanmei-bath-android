@@ -18,7 +18,6 @@
 ```
 https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
 https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
-https://jsd.onmicrosoft.cn/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
 ```
 
 - SHA-256 `a6f8e6f01c89a99a662736aeeb63cc4f33a49e57eb7367f2e383b273407a4ac0`

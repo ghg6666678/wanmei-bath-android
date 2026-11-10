@@ -70,7 +70,6 @@ public class Update {
     private static final String[] CDNS = {
             "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
             "https://gcore.jsdelivr.net/gh/%s@v%s/release/%s",
-            "https://jsd.onmicrosoft.cn/gh/%s@v%s/release/%s",
     };
 
     private static final class Source {
@@ -113,14 +112,17 @@ public class Update {
                 "https://api.github.com/repos/" + REPO + "/releases/latest"));
         // 曾经这里有一条 ghproxy.cn 的镜像通道，2026-11 因该域名跳转色情站点已删除。
         // 免费代理一律不再进入代码，见 CDNS 上的注释。
-        // jsDelivr 有多个 CDN 节点：主节点（Fastly）对分支文件缓存长达 12 小时，
-        // 刚发版后仍会返回旧版本；备用节点与 raw 都是即时生效的，所以一起探测，取版本号最高的。
+        // jsDelivr 有两个可直接服务内容的节点（都在 Cloudflare 上）。主节点对分支文件
+        // 缓存长达 12 小时，刚发版后仍会返回旧版本；gcore 与 raw 是即时生效的，一起探测取最高。
+        //
+        // 这里曾经还有一个 jsd.onmicrosoft.cn（标称「国内节点」）。2026-11 实测它对
+        // raw.githubusercontent.com 做 301 跳转——本身不存内容，只是把请求转给 raw，
+        // 而 raw 在国内比 github 还难访问。已经移除，别再相信任何「国内加速」的域名，
+        // 先看它的响应头是 200 还是 30x。
         probes.add(new Source(KIND_MANIFEST, "jsDelivr CDN",
                 "https://cdn.jsdelivr.net/gh/" + REPO + "@main/latest.json"));
         probes.add(new Source(KIND_MANIFEST, "jsDelivr 备用节点",
                 "https://gcore.jsdelivr.net/gh/" + REPO + "@main/latest.json"));
-        probes.add(new Source(KIND_MANIFEST, "jsDelivr 国内节点",
-                "https://jsd.onmicrosoft.cn/gh/" + REPO + "@main/latest.json"));
         probes.add(new Source(KIND_MANIFEST, "raw 直连",
                 "https://raw.githubusercontent.com/" + REPO + "/main/latest.json"));
 
