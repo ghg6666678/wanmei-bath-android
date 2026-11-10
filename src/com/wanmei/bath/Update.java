@@ -55,13 +55,14 @@ public class Update {
      * 随时可能被抢注或劫持，把用户导向哪里完全不受我们控制。这类域名一律不进代码——
      * 宁可少一条通道，也不能让「检查更新」变成跳板。
      *
-     * <p>路径依赖：APK 需要同时提交到仓库的 release/ 目录，并用版本 tag 固定，
-     * 这样 CDN 拿到的就是这一版，不会因为分支缓存返回旧文件。
+     * <p>路径依赖：APK 需要同时提交到仓库的 release/ 目录。文件名里带版本号，
+     * 每一版的路径都是新的，所以 jsDelivr 的分支缓存不会让我们拿到旧文件——
+     * 它只影响「同一个路径的内容变更」（比如 latest.json），不影响新文件名。
      */
     private static final String[] CDNS = {
-            "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
-            "https://gcore.jsdelivr.net/gh/%s@v%s/release/%s",
-            "https://jsd.onmicrosoft.cn/gh/%s@v%s/release/%s",
+            "https://cdn.jsdelivr.net/gh/%s@main/release/%s",
+            "https://gcore.jsdelivr.net/gh/%s@main/release/%s",
+            "https://jsd.onmicrosoft.cn/gh/%s@main/release/%s",
     };
 
     private static final class Source {
@@ -217,8 +218,8 @@ public class Update {
                 JSONArray ms = new JSONArray();
                 String name = latest.optString("apkName", "");
                 // 只有「仓库里有这个 APK」时才有 CDN 地址可拼；Release 资产 CDN 取不到。
-                if (!ver.isEmpty() && !name.isEmpty()) {
-                    for (String t : CDNS) ms.put(String.format(t, REPO, ver, name));
+                if (!name.isEmpty()) {
+                    for (String t : CDNS) ms.put(String.format(t, REPO, name));
                 }
                 latest.put("mirrors", ms);
             }
