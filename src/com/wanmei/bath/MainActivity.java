@@ -351,6 +351,18 @@ public class MainActivity extends android.app.Activity {
             getSharedPreferences("bath", MODE_PRIVATE).edit()
                     .putString("starDorm", name == null ? "" : name).apply();
         }
+
+        /** 首次启动标记：看过一次引导后就不再弹。存原生，file:// 下 localStorage 不可靠。 */
+        @JavascriptInterface
+        public String getFirstRunFlag() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("firstRunShown", "");
+        }
+
+        @JavascriptInterface
+        public void setFirstRunFlag(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("firstRunShown", v == null ? "" : v).apply();
+        }
     }
 
     /** 安装包自身的版本信息，取不到时给兜底值，不让前端拿到空对象。 */
@@ -396,6 +408,9 @@ public class MainActivity extends android.app.Activity {
             o.put("school", cfg.optString("school", ""));
             o.put("phone", cfg.optString("phone", ""));
             o.put("hasToken", api.hasToken());
+            /* 缺一卡通客户号或学号 = 官方那边还没绑校园卡，要提示用户去绑 */
+            o.put("needCard",
+                    cfg.optString("customerid", "").isEmpty() || cfg.optString("outid", "").isEmpty());
         } catch (Exception ignored) { }
         return o;
     }
@@ -407,7 +422,9 @@ public class MainActivity extends android.app.Activity {
     }
 
     private String handle(String path, String method, String bodyRaw) {
-        if (!api.hasToken()) {
+        /* /api/config 不要求登录：首次使用还没登录时，前端要靠它判断
+           「这个号还没绑校园卡」，好给出绑定指引。 */
+        if (!api.hasToken() && !path.startsWith("/api/config")) {
             return err("还没有登录，请先用手机号登录");
         }
         try {
