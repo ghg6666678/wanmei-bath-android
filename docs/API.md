@@ -1,476 +1,89 @@
-# 接口文档
+# 接口说明
 
-这个客户端一共跟三类服务器打交道，下面把它们分开列清楚：
+这个客户端要跟三类服务器打交道。本文说明**它跟这些服务器之间发生了什么、边界在哪**。
+
+> **范围说明**：这是一份设计说明，不是对接手册 —— 请求地址、参数名、算法、命令名、响应字段一律不展开；需要看实现请直接读仓库源码。之所以这样处理，是因为第三方服务的使用条款通常禁止反向工程与再发布相关资料，本文只保留「做过什么、为什么这么做」。
 
 | 分类 | 对方 | 用在哪 | 性质 |
 | --- | --- | --- | --- |
-| **A. 登录接口** | `app.17wanxiao.com` / `server.17wanxiao.com` | App 与网页端 | 官方 App 接口，逆向还原 |
-| **B. 智慧用水接口** | `vwater.59wanmei.com` | App 与网页端 | 官方 H5 接口，逆向还原 |
-| **C. 本机服务接口** | 自己跑的 `server.py` | 仅网页端 | 本项目自建 |
+| **A. 登录** | 校园平台的登录服务 | App 与网页端 | 第三方接口 |
+| **B. 业务调用** | 校园平台的用水服务 | App 与网页端 | 第三方接口 |
+| **C. 本机服务** | 自己跑的 `server.py` | 仅网页端 | 本项目自建 |
+| **D. 版本检查** | GitHub 及其镜像 | App 与网页端 | 公开接口 |
 
-App 端（Android）把 A、B 两类接口用 Java 重写了（`Login.java` / `Api.java`），不经过 C；网页端则把 A、B 放在 Python 里（`wxlogin.py` / `vwater.py`），浏览器只跟 C 通信。
+App 端把 A、B 用 Java 实现（`Login.java` / `Api.java`），不经过 C；网页端把 A、B 放在 Python 里（`wxlogin.py` / `vwater.py`），浏览器只跟 C 通信。
 
-> 文档里的密钥、token、学号等一律用占位符。真实的签名密钥在源码 `Api.java` / `vwater.py` 的 `SIGN_KEY` 常量里，本文不复述。
+# A. 登录（概述）
+
+官方客户端登录后才能用水。本项目要做的是「不装官方 App 也能登录」，所以必须自己把登录流程实现一遍。
+
+## A.1 三步，顺序不能换
+
+| 步骤 | 做什么 | 为什么不能省 |
+| --- | --- | --- |
+| 1. 建立会话 | 客户端生成一对临时密钥交给服务端，换回会话标识与一份密钥材料 | 后续参数都要用它加密 |
+| 2. 发送短信验证码 | 用会话标识签名后请求发码 | 短信是唯一的身份凭据 |
+| 3. 提交验证码登录 | 手机号 + 验证码，换回账号资料 | 会话在这一步才真正绑定到账号 |
+
+## A.2 每个请求都包一层信封
+
+登录服务的业务请求都要签名：参数先加密，信封本身再算一个哈希值放进请求头。
+
+两个容易错的地方：
+
+- 签名算的是**信封**的紧凑 JSON，不是明文参数。多一个空格签名就错；
+- 加密用的密钥材料来自第 1 步，不是写死的。
+
+## A.3 登录之后拿到什么
+
+解密后是一份账号资料：姓名、学号、学校编号、一卡通编号等。**这些字段要填到业务侧对应的位置**，填错会表现为「登录成功但业务接口说登录态失效」——这是本项目踩得最久的一个坑。
+
+> 关键结论：**用水业务要的凭据，与登录会话是同一份**。只要在同一个会话内按顺序走完三步，它就能直接用于业务调用，不必再去别处取。这是整个项目从「依赖设备权限」转向「独立登录」的分水岭。
+
+## A.4 为什么没做密码登录
+
+协议上支持账号密码登录，实现也早写好了（`wxlogin.py` 里的 `login_pwd()`），但从未接入界面。原因见 [DEVELOPMENT.md](DEVELOPMENT.md)：验证码是一次性的，客户端不必留任何长期凭据。
 
 ---
 
-# A. 登录接口
+# B. 业务调用（概述）
 
-官方 App 的登录。协议来源是社区开源实现（`zhongbr` 的 2020 版、`fuqiuluo/wanxiao-campus` 的 2024 版），本项目按其流程用 Java 与 Python 各实现了一遍。
+所有用水业务都汇总到**同一个入口**，靠请求里的一个命令字段区分功能 —— 不是一组 REST 接口，而是一个 RPC 式的总入口。
 
-## A.0 公共约定
+## B.1 两层结构
 
-| 项 | 值 |
+```
+第一次：换取会话参数（一次跳转，服务端在响应里交回后续要用的标识）
+之后：所有业务发到同一个地址，请求体里写明「做什么 + 参数」
+```
+
+每次业务请求都要带：会话标识、当前时间、以及由这两者算出的签名。签名规则与常量不展开。
+
+两个容易漏的点：
+
+- 会话标识有有效期，过期要重新换取；换取失败通常意味着登录态已失效；
+- 业务调用返回空时，先重换会话再重试一次，多数情况就恢复了。
+
+## B.2 能做什么
+
+| 功能 | 说明 |
 | --- | --- |
-| 域名 | `https://app.17wanxiao.com:443`（新）、`https://server.17wanxiao.com`（老） |
-| User-Agent | `Dalvik/2.1.0 (Linux; U; Android 5.1.1; HUAWEI MLA-AL10 Build/HUAWEIMLA-AL10)` |
-| Content-Type | `application/text;charset=UTF-8`（是 `text`，不是 `application/json`） |
-| 请求体 | **紧凑 JSON**（`{"a":1,"b":2}`，无空格、无换行）。签名算的就是这串字节，多一个空格签名就错 |
-| 客户端版本号 | `wanxiaoVersion = 10552101`（写死在请求参数里） |
-| 设备号 | `deviceId`，一个随机 UUID，整个会话期间保持不变 |
-
-## A.1 交换密钥
-
-登录前必须先换一把会话密钥，后续所有业务参数都用它加密。
-
-```
-POST /campus/cam_iface46/exchangeSecretkey.action
-```
-
-**请求**（不需要 `campusSign`）
-
-```json
-{"key":"<本地生成的 RSA-1024 公钥，Base64>"}
-```
-
-- 公钥格式必须是 **X.509 SubjectPublicKeyInfo**（Java 的 `RSAPublicKey.getEncoded()`、PyCryptodome 的 `export_key(format='DER')`，实测 162 字节）
-- 手工拼的 PKCS#1 格式（140 字节）会被接受但**返回 200 + 空响应**——这是本项目踩过的一个坑
-
-**响应**
-
-不是 JSON，而是一段 Base64 密文（RSA PKCS#1 v1.5 加密）：
-
-```
-<base64>
-```
-
-用本地私钥解密后得到：
-
-```json
-{"session":"<会话 ID>","key":"<appKey，至少 24 字节>"}
-```
-
-| 字段 | 用途 |
-| --- | --- |
-| `session` | 会话 ID。**登录成功后，它就是「智慧用水」要的 token** |
-| `key` | 3DES 密钥材料，取**前 24 字节**作为 `DESede` 的 key |
-
-## A.2 发送短信验证码
-
-```
-POST /campus/cam_iface46/gainMatrixCaptcha543.action
-```
-
-**请求**
-
-```json
-{"action":"registAndLogin","confirm":false,"deviceId":"<uuid>","mobile":"<11 位手机号>","requestMethod":"cam_iface46/gainMatrixCaptcha543.action","type":"sms"}
-```
-
-**响应**
-
-```json
-{"code_":"0","message_":"...","data":"..."}
-```
-
-`code_` 为 `"0"` 表示成功；否则把 `message_` 原样抛给用户。
-
-> 同参数的 `checkBeforeSendRegisterCode.action` 用于发送前检查号码是否已注册，本项目仅在命令行工具里调用，App 内不调。
-
-## A.3 短信验证码登录
-
-```
-POST /campus/cam_iface46/registerUsersByTelAndLoginNew.action
-```
-
-**请求**
-
-```json
-{"appCode":"M002","deviceId":"<uuid>","mobile":"<手机号>","netWork":"wifi","qudao":"tencent","requestMethod":"cam_iface46/registerUsersByTelAndLoginNew.action","shebeixinghao":"<机型>","sms":"<验证码>","systemType":"android","telephoneInfo":"12","telephoneModel":"<机型>","wanxiaoVersion":10552101}
-```
-
-**响应**
-
-```json
-{"code_":"0","message_":"...","data":"<base64 的 3DES 密文>"}
-```
-
-`data` 解密（用 A.1 的 appKey 前 24 字节）后得到：
-
-```json
-{"user":{"token":"...","customId":"...","ecardCustomerid":"...","authStuNo":"...","name":"...","customName_":"..."}}
-```
-
-| 字段 | 映射到本项目的配置 | 说明 |
-| --- | --- | --- |
-| `customId` | `customerCode` | 学校/客户编码 |
-| `ecardCustomerid` | `customerid` | 一卡通客户号 |
-| `authStuNo`（其次 `userName` / `account`） | `outid` | 学号 |
-| `name` | `name` | 姓名 |
-| `customName_`（其次 `schoolName` / `customerName`） | `school` | 学校名 |
-
-> **关于 token**：本项目写进配置、拿去调用水接口的，是 A.1 交换密钥拿到的 **`session`**，不是这里的 `user.token`。`user.token` 代码里也解析出来了（截前 36 位备用），但实测 H5 认的是 `session`——两处都保留，避免哪天服务端换了口径。
-
-> `outid` / `customerid` / `customerCode` 这三个值在 B.1 的 `entrance` 里还会被服务端重新下发一次，**以服务端下发的为准**。
-
-## A.4 密码登录（本项目未使用）
-
-```
-POST /campus/cam_iface46/loginnew.action
-```
-
-参数与 A.3 类似，用 `password` 代替 `sms`。密码不是明文，而是**逐字符**加密后组成数组：
-
-```json
-{"password":["<第 1 个字符的 3DES 密文 base64>","<第 2 个字符…>"]}
-```
-
-其余字段多出 `type:"1"`、`yunyingshang:"07"`。响应结构与 A.3 相同。
-
-### 为什么本项目没采用它
-
-协议是先摸清的，所以 `wxlogin.py` 里有个现成的 `login_pwd()`；但它**从来没有被调用过**——命令行、网页、App 三处入口都是短信验证码，App 端（`Login.java`）更是根本没写密码这条路。下面三条是事后归纳（开发时没留决策记录），按确定性排：
-
-1. **票据可以只存 token**。验证码是一次性的，登录完只保留 session 就够，客户端不留任何长期凭证；密码登录则必须让客户端握着明文密码——要么每次手输，要么落盘，两种都比验证码方案的风险高。
-2. **要记的东西更少**。短信登录是「手机号 + 6 位码」；密码登录是「手机号 + 密码」，还多一个「忘了密码得回学校统一认证找回」的坑——对一个「打开就能洗澡」的工具来说，这是反向优化。
-3. **对单点登录没有区别**。两种方式都会把原版 App 踢下线，不存在哪条路更温和。
-
-> 另外，各校是否开放密码登录并不确定（有些学校只走验证码）。要做也不是难事：Python 侧现成，Java 侧补一个方法约百行。
-
-## A.5 加密与签名细则
-
-这三个步骤是登录能成功的关键，顺序不能错。
-
-**① 业务参数加密（3DES-CBC）**
-
-```
-算法：DESede/CBC/PKCS5Padding（等价 PKCS7）
-key ：appKey 的前 24 字节
-IV  ：固定字符串 "66666666"
-输出：Base64
-```
-
-**② 组装信封**
-
-```json
-{"session":"<A.1 拿到的 session>","data":"<① 的 Base64>"}
-```
-
-**③ 计算签名（campusSign）**
-
-```
-campusSign = sha256(紧凑 JSON(信封)).hex()
-```
-
-- 算的是**上面这串信封原文**，不是明文参数
-- 必须是紧凑 JSON：Java 端是手工字符串拼接，Python 端是 `separators=(',',':')`
-- 结果放**请求头** `campusSign`
-
-```
-POST /campus/cam_iface46/xxx.action
-Content-Type: application/text;charset=UTF-8
-campusSign: <上一步的 sha256 十六进制>
-User-Agent: <A.0 的 UA>
-
-{"session":"...","data":"..."}
-```
-
-> 响应里的 `data` 字段同样用 ① 的方式解密（换密钥接口除外，那个是 RSA）。
-
----
-
-# B. 智慧用水接口
-
-业务全在官方 H5（`xqh5.17wanxiao.com/water3to1`）里，App 原生层只负责套壳。所有业务调用都汇总到**同一个地址**，靠 `cmd` 字段区分功能。
-
-## B.0 公共约定
-
-| 项 | 值 |
-| --- | --- |
-| 基地址 | `https://vwater.59wanmei.com/usewater` |
-| `Origin` | `https://xqh5.17wanxiao.com` |
-| `User-Agent` | 官方 H5 的 UA，末尾带 `wanxiao/5.8.36` |
-| 请求体格式 | `application/x-www-form-urlencoded` |
-| 时间戳 | `timestamp` 用**毫秒**；业务参数里的 `timestamp` 字段用 `yyyyMMddHHmmss` |
-
-## B.1 入口：换取 uuid
-
-所有业务调用前必须先拿 `uuid`，它由入口跳转下发。
-
-```
-GET /api/use-water/entrance?source=wx&tVer=20260918&versionnum=1050836101
-    &customerId=<customerCode>&systemType=Android&UAinfo=wanxiao
-    &versioncode=10589101&token=<A.3 拿到的 token>
-```
-
-**关键点：不能跟随 302 跳转。** 需要的不是跳转后的页面，而是响应头里的 `Location`：
-
-```
-302 Location: https://xqh5.17wanxiao.com/water3to1/?uuid=<uuid>&outid=<学号>&customerid=...&customerCode=...
-```
-
-| 参数 | 说明 |
-| --- | --- |
-| `uuid` | 后续所有请求的签名因子与请求头 |
-| `outid` / `customerid` / `customerCode` | 服务端下发的权威值，**覆盖登录时拿到的** |
-
-- 解析出的完整 `Location` 会作为后续请求的 `Referer`
-- 没有 `Location` 或没有 `uuid` → 说明 token 已失效，需要重新登录
-- 本项目在 uuid 超过 **240 秒（App）/ 300 秒（网页端）** 后自动重新 entrance；业务调用失败时也会重置 uuid 重试一次
-
-## B.2 通用调用
-
-```
-POST /api/use/water/h5/WXInvokFront/
-```
-
-**请求头**
-
-| 头 | 值 |
-| --- | --- |
-| `uuid` | B.1 拿到的 uuid |
-| `timestamp` | 当前毫秒时间戳，字符串 |
-| `encrypt` | `Base64(AES-ECB-PKCS7(uuid + "-" + timestamp, SIGN_KEY))` |
-| `Referer` | B.1 的 `Location` 完整地址 |
-
-**请求体**（form-urlencoded）
-
-```
-param=<紧凑 JSON>&source=wx
-```
-
-`param` 的 JSON：
-
-```json
-{"cmd":"<功能名>","ver":"2.0","source":"wx", ...功能参数}
-```
-
-**响应**
-
-```json
-{"body":"<内层 JSON，可能是字符串也可能是对象>"}
-```
-
-内层统一结构：
-
-```json
-{"result":"0","message":"...","data":{}}
-```
-
-- `result` 为 `"0"` 表示成功；非 `0` 时 `message` 通常是失败原因
-- 内层 `message` 含「登录」「用户信息」字样 → App 端会当成登录态失效，直接弹登录框；网页端把原文透传给用户
-
-## B.3 签名说明
-
-```
-明文   = uuid + "-" + timestamp（毫秒）
-算法   = AES/ECB/PKCS5Padding（即 PKCS7）
-密钥   = SIGN_KEY，16 字节，标准 AES-128
-        （官方 H5 前端 JS 里的明文常量；Java 与 Python 都用各自的原生实现，不需要 Node）
-输出   = Base64，放请求头 encrypt
-```
-
-> 用的是标准 AES-128：16 字节密钥。曾经误判为「13 字节非标准变体」，核对 H5 后已更正——14 个字母的拼音 + 两位凑足 16 字节，恰好是合法密钥长度。
-
-## B.4 浴室列表 + 当前预约
-
-```json
-{"cmd":"zfbgetbathroomlist","outid":"<学号>","ver":"2.0","source":"wx"}
-```
-
-**响应 `data`**
-
-| 字段 | 说明 |
-| --- | --- |
-| `bathroomlist[]` | 浴室列表 |
-| `orderbathroomlist[]` | 当前有效的预约（含验证码） |
-| `nowdate` | 服务端当前时间，`HHMMSS`，用于校时 |
-| `oddfare` | 余额占位值，**实测恒为 `"0.0"`，不能当余额用** |
-
-浴室项（`bathroomlist[]`）：
-
-| 字段 | 说明 |
-| --- | --- |
-| `bathroomcode` | 浴室编号，预约时要用 |
-| `bathroomname` | 名称，如 `一号宿舍a区` |
-| `freetermnums` | 空闲设备数 |
-| `sumtermnums` | 设备总数 |
-| `max_fare_limit` / `max_time_limit` | 该浴室的默认限额（分）/ 限时（分钟） |
-| `businessclosetime` | 营业结束时间，`HH:mm:ss` |
-
-预约项（`orderbathroomlist[]`）：
-
-| 字段 | 说明 |
-| --- | --- |
-| `orderno` | 订单号，取消时用 |
-| `bathroomname` | 浴室名 |
-| `orderdatetime` | 预约时间 `yyyy-MM-dd HH:mm:ss` |
-| `verificationcode` | **验证码**，去设备上输入开阀 |
-| `max_fare_limit` / `max_time_limit` | 这单在下单时冻结的限额/限时 |
-
-> 订单里存的是**下单当时**的限额/限时。所以改了设置必须重新下单才生效——这就是「保存限额后自动取消已有预约」的原因。
-
-## B.5 余额
-
-```json
-{"cmd":"zfbgetcustoddfare","outid":"<学号>","timestamp":"20261109183000","ver":"2.0","source":"wx"}
-```
-
-响应直接给 `oddfare`（单位元，字符串小数）。**必须单独查这个接口**，B.4 里的 `oddfare` 是假的。
-
-## B.6 查询消费限制
-
-```json
-{"cmd":"zfbquerylimit","outid":"<学号>","limittype":1,"timestamp":"20261109183000","ver":"2.0","source":"wx"}
-```
-
-| `limittype` | 含义 |
-| --- | --- |
-| `1` | 预约洗澡（本项目用这个） |
-| `2` | 打热水 |
-| `3` | 宿舍淋浴 |
-
-**响应 `data`**
-
-```json
-{"max_fare_limit":"235","max_time_limit":"30"}
-```
-
-`max_fare_limit` 单位是**分**。
-
-## B.7 保存消费限制
-
-```json
-{"cmd":"zfbsavelimit","outid":"<学号>","timestamp":"20261109183000","limittype":1,"max_fare_limit":235,"max_time_limit":30,"ver":"2.0","source":"wx"}
-```
-
-| 参数 | 约束 |
-| --- | --- |
-| `max_fare_limit` | 单位**分**。本项目实测范围 100–2000（1–20 元），且必须是 **5 的整数倍**（浴室按 0.05 元扣费） |
-| `max_time_limit` | 分钟，1–120 |
-| 不限额 | `max_fare_limit = 500000`（即 5000 元）是官方的「不限」标记 |
-
-`result == "0"` 为成功。
-
-> 服务端不做这些范围校验，非法值也会返回成功。范围与步进是本项目在客户端与本地服务里把关的，避免写出一个「看着存上了、实际扣费异常」的配置。
-
-## B.8 预约（生成验证码）
-
-```json
-{
-  "cmd":"zfbskorderbathroom",
-  "orderno":"",
-  "bathroomcode":"<浴室编号>",
-  "outid":"<学号>",
-  "orderdatetime":"2026-11-09 18:30:00",
-  "verificationtype":"2",
-  "timetype":"0",
-  "ecard_customerid":"<一卡通客户号>",
-  "verificationtelephone":"<学号>",
-  "max_fare_limit":235,
-  "max_time_limit":30,
-  "timestamp":"20261109183000",
-  "ordertype":0,
-  "ver":"2.0","source":"wx"
-}
-```
-
-| 参数 | 说明 |
-| --- | --- |
-| `orderno` | 新建订单传空串 |
-| `orderdatetime` | `yyyy-MM-dd HH:mm:ss`，**秒固定为 00**；取服务端时间，不用本机时钟 |
-| `verificationtype` | 验证方式，取值见下表。本项目固定 `"2"` |
-| `verificationtelephone` | 与 `verificationtype` 配对的身份值，**来自登录态，不需要用户输入** |
-| `max_fare_limit` / `max_time_limit` | 这次订单要冻结的限额/限时（分 / 分钟） |
-
-### `verificationtype` 的取值
-
-它不是布尔值，而是一个**逗号分隔的方式列表**——官方 H5 由两个勾选项拼出来：
-
-| 值 | 含义 | 配对的 `verificationtelephone` |
-| --- | --- | --- |
-| `"2"` | 只勾了「验证码」 | `outid`（学号） |
-| `"1"` | 只勾了另一种方式 | `mobile`（手机号） |
-| `"1,2"` | 两种都允许 | `mobile` |
-
-官方 H5 的原始判断（`app.89ec9fbfe4bf5925b116.js`）：
-
-```js
-var e = "";
-if (this.selected.two) { e += "1"; this.selected.one && (e += ",2"); }
-else { if (!this.selected.one) return void this.$toast("请选择设备验证方式"); e += "2"; }
-// ...
-verificationtype: e,
-verificationtelephone: 2 == e ? this.$user.outid : this.$user.mobile
-```
-
-**这个学校的「选择验证方式」只渲染了一个「验证码」按钮**（绑定 `selected.one`），所以提交时恒为 `"2"`、`verificationtelephone` 恒为学号。
-
-### 验证发生在设备上，不是手机端
-
-`verificationtelephone` 只是把身份**绑定**到订单上，告诉服务端「这台设备该认谁」。真正核对身份的地方是浴室设备，官方说明原文：
-
-> 第一步：在设备点击任意键（取消键除外），输入六位验证码；
-> 第二步：再次点击「确认」完成身份验证，**设备屏幕显示学号和消费金额**表示验证成功；
-> 第三步：最后点击「确认」开始使用淋浴。
-
-所以客户端从登录态直接带学号即可，**任何环节都不需要用户手输学号或手机号**——设备上用 6 位码代替一长串学号，本来就是这套设计的意义。
-
-> 顺带一提：`verificationtype == "1"` 时，官方成功页不显示「在设备上输入验证码」，说明那条路径不需要在设备上输码（可能是手机端直接下发的形式）。我们校区允许的选项里没有它，属于未验证的推断。
-
-**响应**
-
-```json
-{"result":"0","message":"...","data":{"verificationcode":"123456","orderdatetime":"2026-11-09 18:30:00"}}
-```
-
-> 「预约时间不能早于当前时间」这个报错**是官方前端自己抛的**，服务端并不校验。但本项目仍然在客户端拦截，避免生成过期订单——不用本地时钟算时间，正是为了绕开这个报错的根因。
-
-## B.9 取消预约
-
-```json
-{"cmd":"zfbrevokeorderbathroom","outid":"<学号>","closetype":0,"orderno":"<订单号>","timestamp":"20261109183000","ver":"2.0","source":"wx"}
-```
-
-`result == "0"` 为成功。取消后验证码立即失效。
-
-## B.10 用水记录
-
-```json
-{"cmd":"getwaterconsume","outid":"<学号>","page_index":1,"page_rows":20,"timestamp":"20261109183000","month":"2026-11","ver":"2.0","source":"wx"}
-```
-
-| 参数 | 说明 |
-| --- | --- |
-| `month` | 可选，`yyyy-MM`；不传则返回最近记录 |
-| `page_index` / `page_rows` | 分页，本项目固定第 1 页、每页 20 条 |
-
-**响应 `data`**
-
-| 字段 | 说明 |
-| --- | --- |
-| `totalfare` | 本月合计（元） |
-| `data[]` | 明细 |
-
-明细项：
-
-| 字段 | 说明 |
-| --- | --- |
-| `termname` | 设备名（浴室） |
-| `termid` | 设备编号 |
-| `end_opdt` | 结束时间 |
-| `opfare` | 本次扣费（元） |
-| `status` | `"1"` 已扣费，其他为未扣费 |
+| 浴室列表 | 可用浴室、空闲设备数、营业时间 |
+| 当前预约 | 预约记录与验证码 |
+| 余额 | 单独查询（列表里那个余额字段是占位值，恒为 0） |
+| 消费限制 | 读取与保存限时 / 限额 |
+| 预约 / 取消 | 下单生成验证码，按订单号撤销 |
+| 用水记录 | 按月查询明细 |
+
+## B.3 几个业务事实
+
+这些是实测与官方文案确认的行为，与接口怎么调无关：
+
+- 验证码当日有效，可重复使用；
+- 限时 / 限额从**开阀那一刻**起累计，超限后重输同一个验证码可以再开；
+- 订单里冻结的是**下单当时**的限时 / 限额，所以改了设置必须重新下单才生效；
+- 「预约时间不能早于当前时间」这个报错，是官方前端自己抛的，服务端并不校验；
+- **充值无法复刻**：官方支付绑定了小程序标识、包名与签名三者，第三方客户端调不起。本项目只做「说明 + 打开微信」。
 
 ---
 
@@ -490,6 +103,8 @@ verificationtelephone: 2 == e ? this.$user.outid : this.$user.mobile
 
 ## C.1 接口一览
 
+> 下面这些是**本项目自己定**的接口，字段名部分沿用了上游的命名，但用途与含义以本节为准；这一节不涉及如何调用第三方服务。
+
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | GET | `/api/state` | 一次性拿 配置 + 余额 + 预约 + 浴室列表 + 服务端时间 + 当前限制 |
@@ -506,7 +121,7 @@ verificationtelephone: 2 == e ? this.$user.outid : this.$user.mobile
 
 ## C.2 `/api/state`
 
-`GET`，无参数。内部依次调用 B.4、B.5、B.6。
+`GET`，无参数。内部依次查浴室列表、余额与当前消费限制。
 
 ```json
 {
@@ -521,7 +136,7 @@ verificationtelephone: 2 == e ? this.$user.outid : this.$user.mobile
 }
 ```
 
-`orders` / `bathrooms` 的结构同 B.4；`balance` 查询失败时为 `null`。
+`orders` 是当前预约（含验证码），`bathrooms` 是浴室列表（含空闲数与营业时间）；`balance` 查询失败时为 `null`。
 
 ## C.3 `/api/book`
 
@@ -563,7 +178,7 @@ verificationtelephone: 2 == e ? this.$user.outid : this.$user.mobile
 {"time":30,"fare":2.35}
 ```
 
-`fare` 单位是**元**（服务端内部换算成分）。校验规则同 B.7：`time` 1–120；`fare` 1.00–20.00 且必须是 0.05 的整数倍，或传 5000 表示不限。
+`fare` 单位是**元**（服务端内部换算成分）。校验规则与其他入口一致：`time` 1–120；`fare` 1.00–20.00 且必须是 0.05 的整数倍，或传 5000 表示不限。
 
 ## C.6 `/api/native`
 
@@ -632,148 +247,60 @@ App 与网页端都会查 GitHub，通道与降级顺序见 [DEVELOPMENT.md 8.4]
 
 ---
 
-# E. 报错对照表
+# E. 排查思路
 
-| 现象 | 通常原因 | 处理 |
-| --- | --- | --- |
-| 登录接口返回空响应 | 公钥不是 X.509 格式 | 用 `getEncoded()` / `export_key(format='DER')` |
-| 登录返回「签名错误」 | 信封 JSON 不紧凑，或签名算错了对象 | 签的是信封，不是明文参数 |
-| 换密钥后所有接口 401/失败 | `appKey` 取的字节数不对 | 取前 24 字节 |
-| 用水接口一直提示登录失效 | token 用错来源 | 用 A.1 的 `session`，不是 `user.token` |
-| `entrance` 拿不到 Location | token 已过期，或跟随了 302 | 关掉重定向再取响应头 |
-| 业务调用无响应（HTTP 000 / 空 body） | uuid 过期 | 重置 uuid，重新 entrance 后重试一次 |
-| 余额显示 0。00 | 用了浴室列表里的 `oddfare` | 单独调 `zfbgetcustoddfare` |
-| 改了限额但没生效 | 订单里冻的是下单时的值 | 重新预约 |
-| 预约报「时间不能早于当前」 | 用了本机时钟 | 用 `nowdate`（服务端时间）算 |
+按「先怀疑什么」排列，不涉及具体接口：
+
+| 现象 | 先检查什么 |
+| --- | --- |
+| 登录成功，但业务接口说登录态失效 | 账号资料有没有填到正确位置；服务端重新下发的值有没有覆盖本地值 |
+| 登录接口返回 200 但内容为空 | 参数的编码格式是否与服务端期望一致（格式错时服务端不报错，只回空，极难排查） |
+| 所有请求都失败且没有响应体 | 会话是否已过期；重新换取会话后重试 |
+| 余额一直是 0 | 是不是读了列表里的占位字段，而不是单独查询 |
+| 改了限额但没生效 | 订单冻结的是下单时的值，需要重新预约 |
+| 预约报「不能早于当前时间」 | 是不是用了本机时钟 |
+| 用着用着突然「掉登录」 | 会话有效期有没有处理 |
 
 ---
 
 # F. 已知限制
 
 - **单点登录**：完美校园一个账号只允许一个会话。在这里登录会让官方 App 下线，反之亦然。
-- **接口非公开**：全部来自官方 H5 与 App 的逆向还原，官方随时可能改参数或加校验，届时需要重新对一遍。
-- **只在一所学校实测**：`customerCode` / `customerid` / `outid` 不是写死的，由登录返回；但浴室命名、扣费单位、限额档位可能因校而异。
+- **接口非公开**：这些接口没有对外文档，官方随时可能调整参数或增加校验，届时需要重新对一遍。
+- **只在一个校区实测**：学校码、一卡通号、学号都不是写死的，由登录返回；但浴室命名、扣费单位、限额档位可能因校区而异——本校不同校区用的系统都可能不一样。
 - **不要高频请求**：会话与设备会被风控，实测高频调用会触发保护。本项目的刷新间隔是 3 分钟，另有 30 秒防抖。
-- 本文档只描述协议，**不含任何账号、票据或个人信息的真实值**。
+- 本文只描述「发生了什么」，**不含任何账号、票据或个人信息的真实值，也不提供可直接复现的调用细节**。
 
 ---
 
-# G. 蓝牙水控（协议已摸清，本部设备不用这套）
+# G. 蓝牙水控（调研结论，未实现）
 
-前面 B 节说的「预约浴室」是**联网 + 验证码**开阀。但官方的「宿舍淋浴」在部分学校是**蓝牙水控**：手机直接连水控器，写指令开阀、关阀、结算。
+官方还有一条「宿舍淋浴」的产品线，在部分学校是**蓝牙水控**：手机连上水控器直接开阀，不走验证码。
 
-> **核对记录（2026-11-10）**
->
-> 有人提到**本部**的水控是蓝牙的。查了那边的实拍照片：设备是一台**带二维码、贴「扫码下载 APP」的独立终端**，顶部有疑似显示屏的窗口、有线供电，**没有刷卡区、没有品牌标识**。
->
-> **扫那个二维码，跳转的是「趣智校园」的下载页。**
->
-> 这里必须把校区范围说清楚，否则很容易误判：
->
-> - **我所在的校区**用的是完美校园——公共浴室预约、到设备输验证码，实测可用，也就是本项目对接的那套；
-> - **本部**用的是趣智校园，另一家厂商的另一套系统。
->
-> 两者不是同一套系统的两种接入方式，而是两家公司的产品。所以「蓝牙水控」这条路在**本部**没有落点，跟本项目服务的校区无关。
->
-> 另外，**仅凭外观无法区分蓝牙与联网**——两种水控都可能长这样。真正确定"那台设备不吃这套"的是扫码结果；而现有验证码流程在我们校区实测可用，是另一条独立证据。
->
-> 结论：**App 端不集成蓝牙水控**。本节保留为**协议存档**——其他学校如果设备确实是完美校园的蓝牙水控，可以照这里实现。
+本项目**没有实现**这条路径。这一节只记录调研结论，不含实现细节。
 
-本项目**尚未实现**这条路径，但协议已经摸清，结论是：**技术上可行，且比预想简单**。下面是依据与落地条件。
+## G.1 技术上可行，且比预想简单
 
-## G.1 三个关键事实
+关键在于：**加密不在客户端**。开阀指令由服务端生成，客户端只负责「把字节写给设备、把设备回包再问一次」。所以不需要自己实现一套私有加密算法，只需要 BLE 传输层加一个状态机。
 
-**① 官方的蓝牙 JS 不实现蓝牙，只是个转发层**
+## G.2 与本项目的关系
 
-`wmxy-js-bluetooth-api-v2.0.0.js` 里 20 个方法（`openBluetoothAdapter`、`createBLEConnection`、`writeBLECharacteristicValue`…）全是同一套模板，最终都走：
+调研起因是有人提到本校某校区的水控是蓝牙的。核对结果：
 
-```js
-invokeNativeMethod(methodName, params) {
-  if (!this.browser.isIphone()) {
-    window.wanxiao_bluetooth.executeBindMethod(methodName, params);
-  } else {
-    window.webkit.messageHandlers[methodName].postMessage(params);
-  }
-}
-```
+- **我所在的校区**用完美校园的「洗澡」（公共浴室预约 + 验证码），实测可用，也就是本项目对接的那套；
+- **本部**用的是另一家厂商的「趣智校园」，另一套系统、另一个 App。
 
-也就是说，官方 App 里有一个原生对象 `wanxiao_bluetooth` 在干实事。Android 上照做即可——这层壳不需要逆向。
+两者不是同一套系统的两种接入方式，而是两家公司的产品。所以蓝牙方案在本部没有落点，跟本项目服务的校区无关。
 
-**② 加密不在客户端，指令由服务器下发**
+> 顺带一提：仅凭设备外观**无法区分蓝牙与联网**，两种水控都可能长得一样。真正定案的是扫机身二维码后跳转的那个 App。
 
-开阀指令不是本地算出来的，而是向服务器要一段十六进制字节，手机原样写给设备：
+## G.3 为什么没做
 
-```js
-bleApi: function (t, e) {
-  var i = { method: t.cmd, param: JSON.stringify(t) };
-  V.post("/api/use/water/h5/blueInvokFront", i)
-}
-// 调用处：
-this.$http.bleApi({cmd: "GetKey", ...}, function (res) {
-  res.result ? this._write(res.result, cb) : this.connectError("权限认证出现错误")
-})
-```
+- **没有设备可测**：协议只能靠推断，字节对不对只能靠设备回包确认，风险不可控；
+- **要加权限**：BLE 扫描与连接会破坏「权限极简」这个取舍；
+- **防蹭用设计**：蓝牙水控通常是挑战-响应加设备绑定，设备可能已被他人占用；
+- **计费更敏感**：「平台下单 + 设备离线记账」两条线，错位风险比验证码模式高得多。
 
-鉴权、报文生成全在服务端。客户端只负责「问字节 → 写设备 → 把设备回包再问一次」。这比逆向一套私有加密算法容易一个量级。
+> 如果将来有学校确实是完美校园的蓝牙水控、又有设备可测，可以按上面的思路重新评估。本节不提供实现路径。
 
-**③ BLE 参数是固定常量**
-
-| 项 | 值 |
-| --- | --- |
-| 服务 UUID | `0000FF12-0000-1000-8000-00805F9B34FB`（短写 `FF12`） |
-| 写特征值 | `0000FF01-0000-1000-8000-00805F9B34FB`（`FF01`） |
-| 通知特征值 | `0000FF02-0000-1000-8000-00805F9B34FB`（`FF02`） |
-
-## G.2 端到端流程
-
-官方 H5 的状态机（`addDevice.vue` → `deviceConnect.vue`）：
-
-| 步骤 | 动作 | 说明 |
-| --- | --- | --- |
-| 1 | 扫描 | `startBluetoothDevicesDiscovery`，可按服务 UUID 过滤，默认 15 秒超时 |
-| 2 | 连接 | `createBLEConnection` → 订阅 `FF02` 通知 |
-| 3 | `GetKey` | 请求字节 → 写 `FF01`，设备回通知（日志里叫「8001，交换密钥」） |
-| 4 | `GetNotiResult` | 把通知原文回传，拿到 `R2` / `authenticationRandom` / `poscode` / `status` |
-| 5 | `GetLog` | 查询设备上是否有未上传的离线消费记录 |
-| 6 | `recordUploadResult` | 逐条把记录回写设备（确认已上传） |
-| 7 | `EditWaterTerm` | 首次使用：把设备绑定到账号（`poscode` 十六进制转整数） |
-| 8 | `WaterPayRequest` | **平台下单**，返回 `retcode=100` + `totermdata` + 余额 `oddfare` |
-| 9 | `order` | 请求开阀字节 → 写设备；带 `limitTime` / `limitMoney`（补零到 4 位的十六进制） |
-| 10 | `keepConnecting` / `GetControlStatus` | 使用中保活与状态轮询（定时器） |
-| 11 | `EndConsumption` | 关阀，设备回本次消费金额 `amount` |
-| 12 | `WaterPayCommit` | 上传消费记录 → `recordUploadResult` 回写 → 断开 |
-
-## G.3 用到的接口
-
-| 接口 | 用途 | 鉴权 |
-| --- | --- | --- |
-| `POST /usewater/api/use/water/h5/blueInvokFront` | 蓝牙指令生成（`method` + `param`） | 代码里没带 `encrypt` 头，疑似靠 entrance 的会话 cookie |
-| `POST /usewater/api/use/water/h5/WXInvokFront/` | `WaterPayRequest`、`WaterPayCommit`、`EditWaterTerm` 等 | 同 B.2 的签名 |
-
-`blueInvokFront` 的命令：`GetKey`、`GetNotiResult`、`GetLog`、`recordUploadResult`、`keepConnecting`、`order`、`GetControlStatus`、`EndConsumption`。
-
-## G.4 落地条件与风险
-
-**必须有的：**
-
-- 一台真实的、目标校区的蓝牙水控器。没有硬件，这一步无法验证——协议外壳可以写，但「字节对不对」只能靠设备回包确认。
-- 运行时权限：Android 12+ 需要 `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT`；Android 11 及以下扫描还需要定位权限。本项目目前只有 `INTERNET` 与 `ACCESS_NETWORK_STATE`，**加蓝牙意味着权限清单变长**，这会削弱「权限极简」这个卖点。
-- 首次使用要先绑定设备（`EditWaterTerm`），设备归属可能跟房间/账号绑定。
-
-**风险：**
-
-- 计费走的是「平台下单 + 设备离线记账」两条线，任何一步错位都可能出现「开了阀但没扣到钱」或「扣了钱但阀没开」，比验证码模式更敏感。
-- 蓝牙水控是**防蹭用**设计（挑战-响应 + `poscode` 绑定），如果设备已被别人绑定，可能直接拒绝。
-- 没有官方文档，所有字段含义来自压缩后的 JS，命名（`acccode:216`、`scene_info:"蓝牙水控ant_mini"`）只能照抄，理解有限。
-
-## G.5 如果要做，建议的顺序
-
-> 对我们校区来说，这五步都不必走——现有验证码流程已经能用。下面留给设备确实是蓝牙水控的场景。
-> 想低成本确认一台设备是谁家的，扫一下机身上的二维码看跳到哪个 App 就够了，不需要写代码。
-
-1. **只做扫描**：加权限、扫出周围设备的名称/服务 UUID，确认能看见 `FF12` 的水控器（不做任何写入）。这一步零风险，也能验证「本部确实是蓝牙水控」。
-2. **做握手只读**：`GetKey` → 写 → 收通知 → `GetNotiResult`，确认能走通鉴权、拿到 `poscode`。仍然不开阀。
-3. **托管给官方页面**：把官方的蓝牙页面（`bluetooth/*.vue`、`shower/*.vue`）连同 `wmxy-js-bluetooth-api` 一起塞进 WebView，用原生实现 `wanxiao_bluetooth` 桥。这样业务逻辑完全复用官方代码，只需要写 BLE 传输层——工作量最小、最不容易出错。
-4. 最后才考虑用 Java 重写整个状态机。
-
-> 第 3 条其实是性价比最高的：官方 JS 已经把状态机写好了，我们缺的只是一个 `executeBindMethod` 的实现（Android BLE 大约 300 行）。但这样等于把官方页面打包进来，跟「精简客户端」的定位有冲突，需要权衡。
+---

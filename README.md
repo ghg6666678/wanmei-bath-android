@@ -24,8 +24,8 @@
 AndroidManifest.xml
 src/com/wanmei/bath/
     MainActivity.java   WebView 容器 + JS 桥 + 页面路由
-    Api.java            智慧用水协议（AES-ECB 签名、entrance、预约、记录、限时限额）
-    Login.java          登录协议（RSA 换密钥 + 3DES + campusSign）
+    Api.java            智慧用水业务的协议实现（会话、预约、记录、限时限额）
+    Login.java          登录流程实现（建立会话、参数加密、签名）
     Store.java          SharedPreferences 读写
     Update.java         检查更新（多通道探测 + 内置清单/缓存兜底）
 assets/index.html       界面（HTML + JS，走原生桥调 Java）
@@ -64,9 +64,9 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 - **界面**是本地 HTML（`assets/index.html`），WebView 里跑，通过 `@JavascriptInterface` 调原生网络层
 - **网络与协议全在 Java**：不依赖任何第三方库，APK 约 45 KB
-- **登录拿到的 session 就是用水接口要的 token**：先 `exchangeSecretkey` 换密钥得到 session，再用同一 session 提交短信验证码，服务端把它升格为账号会话
-- 每次请求带三个头：`uuid`、`timestamp`（毫秒）、`encrypt`（把 `uuid-时间戳` 用 AES-ECB + PKCS7 加密后 base64）
-- 签名密钥是官方 H5 前端 JS 里的 **16 字节明文常量**（标准 AES-128，见 `SIGN_KEY`）；Java 的 `AES/ECB/PKCS5Padding` 与前端 PKCS7 填充等价，两端都用各自语言的原生实现，不需要 Node.js
+- **登录拿到的会话，就是业务接口要的凭据**：先建立会话，再在同一个会话里提交短信验证码，服务端会把它升格为账号会话
+- 业务请求需要携带会话标识、时间戳，以及由前两者算出的签名；签名规则与常量不在 README 展开，实现见源码
+- 登录与业务都用 Java 原生实现，不依赖任何第三方库，也不需要 Node.js
 - 预约时间用**服务端返回的时间**计算，不用本机时钟——原版 App 的「预约时间不能早于当前时间」报错，根因就是它拿本地时间当默认值又拿本地时间做比较
 - 权限只有 `INTERNET` 和 `ACCESS_NETWORK_STATE`，无 Service / Receiver / Provider，`allowBackup=false`
 
@@ -87,7 +87,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 > **目前只在一所使用「完美校园 智慧用水」的学校实测通过。** 其他学校欢迎试用并反馈，但不保证开箱可用。
 
-协议层基本是通用的：三个服务域名（`vwater.59wanmei.com`、`xqh5.17wanxiao.com`、`app.17wanxiao.com`）都是完美校园的公共服务，签名密钥是官方公共 H5 前端里的固定常量（16 字节、标准 AES-128）；`customerCode`、`customerid`、`outid` 等学校/账号标识**不是写死的**，由短信登录返回，并在 `entrance()` 时被服务端下发的参数覆盖。所以别校用户用自己的账号登录，主流程（登录、余额、预约、取消、记录）大概率能直接跑。
+协议层基本是通用的：登录与业务都走完美校园的公共服务，签名规则固定；学校码、一卡通号、学号这些标识**不是写死的**，由短信登录返回，并在换取会话时被服务端下发的值覆盖。所以别校用户用自己的账号登录，主流程（登录、余额、预约、取消、记录）大概率能直接跑。
 
 但以下三处是按我们校区的实际情况固化的，换学校（甚至换校区）都可能需要调整：
 
@@ -103,14 +103,14 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 ## 参考实现
 
-登录协议（RSA 换密钥 → 3DES 加密提交 → `campusSign` 签名）不是猜出来的，参考了以下公开实现：
+登录流程不是猜出来的，参考了以下公开实现：
 
 - **[ReaJason/17wanxiaoCheckin](https://github.com/ReaJason/17wanxiaoCheckin)** · MIT · 已归档
-  其 `login/` 目录（`campus.py`、`des_3.py`、`rsa_encrypt.py`、`sha1.py`）完整描述了登录握手过程，本项目的 Java 实现按这套流程独立重写。
+  其登录模块完整描述了登录握手过程，本项目的 Java 实现按这套流程独立重写。
 - **[fuqiuluo/wanxiao-campus](https://github.com/fuqiuluo/wanxiao-campus)** · Rust · 未声明许可证
   用于交叉验证较新版本的登录流程与请求加密细节。
 
-用水业务协议（`entrance`、预约、限时限额、用水记录）来自官方 H5 前端 JavaScript 的协议还原，没有对应的开源项目。
+用水业务的流程来自对前端行为的分析，没有对应的开源项目。
 
 若本仓库中存在源自上述项目的代码片段，其版权归原作者所有，按 MIT 许可使用。
 
@@ -120,7 +120,7 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 ## 接口文档
 
-跟服务器交互的每一个接口——登录（换密钥 / 短信验证码 / 签名）、智慧用水的 7 个业务命令、本地服务给网页前端用的 HTTP 接口——地址、参数、响应字段与踩过的坑，见 [docs/API.md](docs/API.md)。这是**公开版**，已剥离账号凭据、个人信息、本机环境细节，以及客户端代码保护相关的可复现步骤；含完整细节的原始复盘不对外发布。
+说明这套客户端跟服务器之间「发生了什么、边界在哪」，见 [docs/API.md](docs/API.md)。这是一份**设计说明，不是对接手册**：请求地址、参数、算法与字段名都不展开——第三方服务的使用条款通常禁止反向工程与再发布相关资料，所以只保留「做过什么、为什么这么做」。
 
 ## 免责声明
 
