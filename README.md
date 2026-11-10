@@ -13,7 +13,7 @@
 
 ## 下载
 
-最新版 **1.1.0**（versionCode 7，66,376 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——三个节点实测都能下：
+最新版 **1.1.0**（versionCode 7，66,376 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——两个节点都在 Cloudflare 上，无代理直连实测可下：
 
 ```
 https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
