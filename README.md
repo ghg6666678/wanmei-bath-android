@@ -2,9 +2,30 @@
 
 完美校园「智慧用水 → 洗澡」的精简客户端。一个图标，打开就是洗澡页：无开屏广告、无首页瀑布流、不需要 root、不需要原版 App。
 
+> ⚠️ **1.0.3 已撤回，请勿使用。**
+> 该版本的「检查更新」里带两个第三方 GitHub 加速代理，其中 `ghproxy.cn` 在移动网络下会**跳转到色情网站**。
+> 已经装了 1.0.3 的：请直接安装最新版，**不要在检查更新里点「镜像 1 / 镜像 2」**——那两条就是被劫持的域名。
+> 主按钮「下载新版 APK」走的是 GitHub 直链，本身没问题，但那个直链在很多移动网络下打不开，所以最快的办法是用下面给出的 CDN 地址手动下载。
+
 > 起因很小：官方入口里「淋浴」和「洗澡」是两个页面，从「淋浴」切到我们实际在用的「洗澡」还得多点一次；再加上开屏广告和几层菜单，去洗个澡要在手机上戳七八下。这个工具只做「洗澡」这一件事——打开就是它。
 
 > **关于本项目**：这是一个 AI coding 项目。作者此前没有相关开发经验，从界面、协议到构建、审计与文档，全程都是通过与 AI agent 用自然语言交流完成的。
+
+## 下载
+
+最新版 **1.1.0**（versionCode 7，66,376 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——三个节点实测都能下：
+
+```
+https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
+https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
+https://jsd.onmicrosoft.cn/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
+```
+
+- SHA-256 `a6f8e6f01c89a99a662736aeeb63cc4f33a49e57eb7367f2e383b273407a4ac0`
+- 与历史版本同一张证书，可直接覆盖安装，登录态不会丢
+- 全部版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
+
+> 路径里的 `@v1.1.0` 固定指向这一版，不会因为仓库更新而变化。发新版时这里的地址会跟着换。
 
 ## 功能
 
