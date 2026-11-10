@@ -45,6 +45,8 @@ public class Update {
     private static final long TOTAL_WAIT = 6000L;
     /** 缓存有效期：7 天。 */
     private static final long CACHE_TTL = 7L * 24 * 3600 * 1000;
+    /** 更新日志摘要的字符上限：够放下要点，再长就让弹层滚动。 */
+    private static final int NOTE_MAX = 3000;
     /** 统一的 UA，探测与拉取保持一致。 */
     private static final String UA = "BathHelper/1.0 (Android)";
     /** 单个下载地址的探测超时：够判断「通不通」，又不至于让用户干等。 */
@@ -418,53 +420,67 @@ public class Update {
     // ================= 工具 =================
 
     /**
-     * 解析 GitHub Release 的正文，取「本次更新」那一节做摘要。
+     * 把 Release 正文抽成弹层里能显示的纯文本。
      *
-     * <p>发布说明的结构一般是：一级标题 → 一段简介 → {@code ## x.y.z 更新：xxx} → 若干条改动。
-     * 界面里只想看到「这次改了什么」，所以优先定位带「更新 / 新增 / 修复」字样的二级标题，
-     * 取它下面的前几条；找不到就退到第一个二级标题，再退到正文开头。
+     * <p>规则：
+     * <ul>
+     *   <li>跳过代码块（``` 之间）和一级标题；</li>
+     *   <li>二级/三级标题保留为小标题，前面空一行；</li>
+     *   <li>列表符号换成「·」；</li>
+     *   <li>表格转成「· 左列 → 右列」，表头与分隔行跳过——纯文本里一排竖线没法看；</li>
+     *   <li>去掉 **加粗** 与 `行内代码` 的记号。</li>
+     * </ul>
+     *
+     * <p><b>上限看字符数，不看行数。</b>之前是「最多 4 行、每行 70 字、撞到下一个小标题就停」，
+     * 结果 1.1.1 的说明只显示出两行——标题加一句概述就没了，用户根本看不到修了什么。
+     * 行数限制对「短行多」的说明特别不友好，所以改成按字符封顶，剩下的交给弹层滚动。
      */
     static String summarize(String body) {
         if (body == null) return "";
         String[] ls = body.split("\n");
+        StringBuilder sb = new StringBuilder();
+        boolean inCode = false;
 
-        int start = -1;
         for (int i = 0; i < ls.length; i++) {
             String t = ls[i].trim();
-            if (t.startsWith("## ") && (t.contains("更新") || t.contains("新增") || t.contains("修复"))) {
-                start = i;
-                break;
-            }
-        }
-        if (start < 0) {
-            for (int i = 0; i < ls.length; i++) {
-                if (ls[i].trim().startsWith("## ")) { start = i; break; }
-            }
-        }
-        if (start < 0) {
-            // 没有小节标题：跳过一级标题和空行，取正文开头
-            for (int i = 0; i < ls.length; i++) {
-                String t = ls[i].trim();
-                if (t.isEmpty() || t.startsWith("# ")) continue;
-                start = i - 1;
-                break;
-            }
-            if (start < 0) return "";
-        }
+            if (t.startsWith("```")) { inCode = !inCode; continue; }
+            if (inCode || t.isEmpty()) continue;
+            if (t.startsWith("# ")) continue;                 // 一级标题不要，正文里有版本号
 
-        StringBuilder sb = new StringBuilder();
-        int lines = 0;
-        for (int i = start; i < ls.length; i++) {
-            String t = ls[i].trim();
-            if (t.isEmpty()) continue;
-            if (i > start && t.startsWith("#")) break;      // 撞到下一个小节就收手
-            if (t.startsWith("## ")) t = t.substring(3).trim();
-            if (t.startsWith("- ") || t.startsWith("* ")) t = t.substring(2);
-            t = t.replace("**", "");
-            if (t.length() > 70) t = t.substring(0, 70) + "…";
+            if (t.startsWith("|")) {
+                String next = (i + 1 < ls.length) ? ls[i + 1].trim() : "";
+                if (t.matches("^[|\\s:////-]+$")) continue;              // 分隔行 |---|
+                if (next.matches("^[|\\s:////-]+$")) continue;           // 表头（下一行是分隔行）
+                String[] cells = t.replaceAll("^\\|", "").replaceAll("\\|$", "").split("\\|");
+                StringBuilder row = new StringBuilder("· ");
+                boolean first = true;
+                for (String c : cells) {
+                    c = c.trim();
+                    if (c.isEmpty()) continue;
+                    if (!first) row.append(" → ");
+                    row.append(c);
+                    first = false;
+                }
+                t = row.toString();
+            } else if (t.startsWith("## ") || t.startsWith("### ")) {
+                t = t.replaceFirst("^#{2,3}\\s*", "");
+                if (sb.length() > 0) sb.append('\n');        // 小标题前空一行
+            } else if (t.startsWith("- ") || t.startsWith("* ")) {
+                t = "· " + t.substring(2);
+            } else if (t.startsWith("> ")) {
+                t = t.substring(2);
+            }
+
+            t = t.replace("**", "").replace("`", "");
             if (sb.length() > 0) sb.append('\n');
             sb.append(t);
-            if (++lines >= 4) break;
+            if (sb.length() >= NOTE_MAX) {
+                int cut = NOTE_MAX;
+                if (cut > 0 && Character.isHighSurrogate(sb.charAt(cut - 1))) cut--;
+                sb.setLength(cut);
+                sb.append("…（已截断，完整说明见下方链接）");
+                break;
+            }
         }
         return sb.toString();
     }
