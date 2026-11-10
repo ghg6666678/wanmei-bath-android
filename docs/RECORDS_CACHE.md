@@ -155,12 +155,37 @@ minDate: new Date(2020, 0, 1), maxDate: new Date,
 s("van-datetime-picker", {attrs: {"min-date": t.minDate, "max-date": t.maxDate, type: "year-month"}})
 ```
 
-也就是 **2020 年 1 月 至今**。现在按这个范围生成，共 83 个（会随时间增长）。
+也就是 **2020 年 1 月 至今**。
 
-两个连带的细节：
+### 换成滚轮，而不是网格
 
-- 标签必须带年份。6 个月时最多跨一次年，「11 月」不会重复；83 个月会有七八个「11 月」，必须写成 `2026-11`。
-- 选项多了之后，选中的那个可能落在可视区外，打开时看着像没选中。`openPicker` 里加了 `scrollIntoView({block:'center'})`。用 `center` 而不是 `nearest`，是为了让上下相邻月份都可见；`inline:'nearest'` 则避免触发横向滚动。
+第一版把 83 个月排成 4 列网格，能选，但很丑——像一张表格。原版是 `van-datetime-picker`，两列上下滚、中间一条选中带。所以改成同样的形态（`#wheelSheet`）：
+
+```
+        取消      选择月份      确定
+                ┌──────────┐
+        2026年   │  11月    │   ← 选中带
+        2025年   │  10月    │
+```
+
+实现选的是 **`scroll-snap` + scroll 事件算最近项**，没有自己写手势：
+
+```css
+.wheelcol{scroll-snap-type:y mandatory;padding:88px 0}
+.wheelcol .it{height:44px;scroll-snap-align:center}
+```
+
+`padding: 88px 0` 与 `.it` 的 44px 是配套的：首尾各留 `(220-44)/2`，这样第一项和最后一项都能滚到正中，不会顶边。
+
+三个实现细节，都是踩过才写上的：
+
+- **滑动中立即高亮，停稳后再做重活**。`scroll` 里直接算 `Math.round(scrollTop / 44)` 切 `.on`；重建月份列（年份变了才需要）延后 90ms，否则拖动时每帧都重排。
+- **停稳后自己纠一次位置**。部分 WebView 对 `scroll-snap` 支持不完整，`Math.abs(scrollTop - i*44) > 2` 时补一次 `scrollTo`。已经对齐就不动，免得和原生吸附打架。
+- **年份变了要夹月份**。从 2024 年 12 月滚回当前年（只有 11 个月）时，`Math.min` 把 12 夹成 11，否则会拼出 `2026-12` 这种不存在的月份。
+
+范围沿用原版，但加了「未来月份不可选」：当前年份只生成到本月。
+
+标签也就不用带年份了——滚轮里年份本身就是一列。
 
 ### 3.5 两个边界
 
