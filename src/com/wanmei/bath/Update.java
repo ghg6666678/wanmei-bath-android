@@ -19,12 +19,13 @@ import java.util.concurrent.TimeUnit;
 /**
  * 检查更新。
  *
- * <p>GitHub 在国内经常连不上（api.github.com 直连超时、第三方代理镜像时好时坏），
+ * <p>GitHub 在国内经常连不上（api.github.com 直连超时、raw 时通时不通），
  * 所以这里不把「能访问 GitHub」当作前提，而是做成三层保障：
  *
  * <ol>
- *   <li><b>网络层</b>：4 个通道并行探测（GitHub 官方 API、代理镜像、jsDelivr CDN、raw），
- *       各自独立超时；官方 API 的结果最权威，清单文件次之，取版本号更高的那个。</li>
+ *   <li><b>网络层</b>：并行探测 GitHub 官方 API、jsDelivr 三个节点与 raw，
+ *       各自独立超时；官方 API 的结果最权威，清单文件次之，取版本号更高的那个。
+ *       <b>不使用任何免费代理域名</b>——原因见 CDNS 上方的注释。</li>
  *   <li><b>本地层</b>：APK 内置 latest.json，记着「已知最新版本 + 下载地址」，
  *       即使一条网络通道都不通，用户也不会只看到一个空白弹窗。</li>
  *   <li><b>缓存层</b>：上次检测成功的结果落在 SharedPreferences（7 天内有效），

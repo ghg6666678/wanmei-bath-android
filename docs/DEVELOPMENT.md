@@ -347,13 +347,16 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | 通道 | 内容 | 特点 |
 | --- | --- | --- |
 | GitHub 官方 API | `api.github.com/.../releases/latest` | 唯一能拿到更新日志、APK 直链与 `digest`（sha256）的来源；但国内时通时不通 |
-| 代理镜像 | `ghproxy.cn` 包一层官方 API | 官方接口不通时的替补，同样能拿到完整信息 |
 | jsDelivr CDN | 读仓库里的 `latest.json` | 国内 CDN 稳，但内容是自己维护的清单，可能落后于真实发布 |
 | raw 直连 | `raw.githubusercontent.com` | 最后一搏，通常也不通 |
 | **APK 内置清单** | `assets/latest.json` | 零网络依赖，断网也知道「最新是哪个版本、去哪下」 |
 | **上次缓存** | SharedPreferences / 服务端 `version_cache.json` | 全部通道失败时至少能报出上次看到的版本 |
 
-> 实测（2026-11）：官方 API 与 jsDelivr 可达；`ghfast.top` 能下 APK 但拒绝 API 路径；`ghproxy.cn` 两者都行；其余镜像多数超时。所以镜像不是越多越好 —— 探测顺序按「本次实测能用的」排，下载镜像和查版本镜像也可以是不同的一组。
+> 实测（2026-11）：官方 API 与 jsDelivr 三个节点可达；raw 直连时通时不通。
+>
+> **曾经这里还有一条 `ghproxy.cn` 的代理镜像，1.0.4 已彻底删除。** 在移动网络下实测，该域名会把下载请求跳转到色情网站。这类免费代理域名随时可能被抢注或劫持，把用户导向哪里完全不受我们控制——当时为了「多一条通道」引入它，是个不该犯的错：**通道数量带来的收益，远小于把用户交给一个不受控域名所承担的风险。**
+>
+> 现在的原则是：**只使用有企业背书的 CDN**（jsDelivr 三节点）。APK 同时提交到仓库 `release/` 目录供 CDN 分发——Release 资产 CDN 取不到，只有仓库文件可以。文件名带版本号，每版路径都是新的，所以分支缓存不会让用户拿到旧文件。
 
 **几个决定**
 
