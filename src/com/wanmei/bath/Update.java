@@ -45,6 +45,12 @@ public class Update {
     private static final long TOTAL_WAIT = 6000L;
     /** 缓存有效期：7 天。 */
     private static final long CACHE_TTL = 7L * 24 * 3600 * 1000;
+    /** 统一的 UA，探测与拉取保持一致。 */
+    private static final String UA = "BathHelper/1.0 (Android)";
+    /** 单个下载地址的探测超时：够判断「通不通」，又不至于让用户干等。 */
+    private static final int PROBE_TIMEOUT = 2500;
+    /** 所有下载地址并行探测，最多等这么久。 */
+    private static final long PROBE_WAIT = 3200L;
 
     private static final int KIND_API = 0;    // GitHub Release 接口
     private static final int KIND_MANIFEST = 1; // latest.json 清单
@@ -155,6 +161,11 @@ public class Update {
         }
         if (best != null) {
             best.latest = withDownload(best.latest);
+            // 只有确实有新版时才去试下载地址——没更新就没必要多等这两秒
+            if (verCmp(best.latest.optString("version", ""),
+                       current.optString("version", "")) > 0) {
+                attachDownloads(best.latest);
+            }
             saveCache(ctx, best.latest);
             return result(true, current, best.latest, best.label, false, "", tried);
         }
@@ -227,6 +238,95 @@ public class Update {
             }
         } catch (Exception ignored) { }
         return latest;
+    }
+
+    // ================= 下载地址实测 =================
+
+    /**
+     * 逐个试一下下载地址，只留下真能取到文件的那几个。
+     *
+     * <p>为什么要做：网络环境千差万别，同一个地址在 A 能下、在 B 打不开。以前只在弹层里
+     * 列一排地址让用户自己试，点了才发现下不动——现在先替他把这一步做掉。
+     *
+     * <p>用的是 {@code Range: bytes=0-0} 的 GET：只要 1 个字节，拿到响应头就断开，
+     * 流量可以忽略。某些 CDN 不支持 HEAD，所以不用 HEAD。
+     *
+     * <p>结果写进 {@code downloads} 数组，每项含 url / ok / ms。只在确认有新版时才做，
+     * 没更新就不必多等这两秒。
+     */
+    private static void attachDownloads(JSONObject latest) {
+        if (latest == null) return;
+        List<String> urls = new ArrayList<>();
+        String apk = latest.optString("apkUrl", "");
+        if (!apk.isEmpty()) urls.add(apk);
+        JSONArray ms = latest.optJSONArray("mirrors");
+        if (ms != null) {
+            for (int i = 0; i < ms.length(); i++) {
+                String u = ms.optString(i, "");
+                if (!u.isEmpty() && !urls.contains(u)) urls.add(u);
+            }
+        }
+        if (urls.isEmpty()) return;
+
+        final String[] arr = urls.toArray(new String[0]);
+        final boolean[] okFlags = new boolean[arr.length];
+        final long[] cost = new long[arr.length];
+
+        ExecutorService pool = Executors.newFixedThreadPool(arr.length);
+        for (int i = 0; i < arr.length; i++) {
+            final int idx = i;
+            pool.submit(new Runnable() {
+                @Override
+                public void run() {
+                    long t0 = System.currentTimeMillis();
+                    okFlags[idx] = probeUrl(arr[idx]);
+                    cost[idx] = System.currentTimeMillis() - t0;
+                }
+            });
+        }
+        pool.shutdown();
+        try {
+            if (!pool.awaitTermination(PROBE_WAIT, TimeUnit.MILLISECONDS)) pool.shutdownNow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < arr.length; i++) {
+            try {
+                JSONObject d = new JSONObject();
+                d.put("url", arr[i]);
+                d.put("ok", okFlags[i]);
+                d.put("ms", cost[i]);
+                d.put("kind", (!apk.isEmpty() && i == 0) ? "github" : "cdn");
+                out.put(d);
+            } catch (Exception ignored) { }
+        }
+        try {
+            latest.put("downloads", out);
+        } catch (Exception ignored) { }
+    }
+
+    /** 取 1 个字节验证地址可用性；拿到 200/206 就算通。 */
+    private static boolean probeUrl(String url) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setRequestMethod("GET");
+            c.setRequestProperty("Range", "bytes=0-0");
+            c.setRequestProperty("User-Agent", UA);
+            c.setConnectTimeout(PROBE_TIMEOUT);
+            c.setReadTimeout(PROBE_TIMEOUT);
+            c.setInstanceFollowRedirects(true);
+            int code = c.getResponseCode();
+            return code == 200 || code == 206;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (c != null) {
+                try { c.disconnect(); } catch (Exception ignored) { }
+            }
+        }
     }
 
     // ================= 数据来源 =================
@@ -430,7 +530,7 @@ public class Update {
             c.setReadTimeout(timeoutMs);
             c.setRequestMethod("GET");
             c.setInstanceFollowRedirects(true);
-            c.setRequestProperty("User-Agent", "BathHelper/1.0 (Android)");
+            c.setRequestProperty("User-Agent", UA);
             c.setRequestProperty("Accept", "application/json, text/plain, */*");
             c.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
             int code = c.getResponseCode();
