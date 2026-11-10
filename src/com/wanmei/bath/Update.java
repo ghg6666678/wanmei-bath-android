@@ -435,11 +435,29 @@ public class Update {
      * 结果 1.1.1 的说明只显示出两行——标题加一句概述就没了，用户根本看不到修了什么。
      * 行数限制对「短行多」的说明特别不友好，所以改成按字符封顶，剩下的交给弹层滚动。
      */
+    /** 表格分隔行，如 |---|:--:|。用字符集合判断，避免多层转义把正则写坏。 */
+    private static boolean isTableSep(String s) {
+        if (s.isEmpty()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != '|' && c != '-' && c != ':' && c != ' ') return false;
+        }
+        return true;
+    }
+
+    /** 去掉行首的 ## / ###，剩下的当小标题文字。 */
+    private static String stripHashes(String t) {
+        int i = 0;
+        while (i < t.length() && t.charAt(i) == '#') i++;
+        return t.substring(i).trim();
+    }
+
     static String summarize(String body) {
         if (body == null) return "";
         String[] ls = body.split("\n");
         StringBuilder sb = new StringBuilder();
         boolean inCode = false;
+        String pendingHead = null;   // 小标题先存着，等它下面真有内容再输出
 
         for (int i = 0; i < ls.length; i++) {
             String t = ls[i].trim();
@@ -449,8 +467,8 @@ public class Update {
 
             if (t.startsWith("|")) {
                 String next = (i + 1 < ls.length) ? ls[i + 1].trim() : "";
-                if (t.matches("^[|\\s:////-]+$")) continue;              // 分隔行 |---|
-                if (next.matches("^[|\\s:////-]+$")) continue;           // 表头（下一行是分隔行）
+                if (isTableSep(t)) continue;                 // 分隔行 |---|
+                if (isTableSep(next)) continue;              // 表头（下一行是分隔行）
                 String[] cells = t.replaceAll("^\\|", "").replaceAll("\\|$", "").split("\\|");
                 StringBuilder row = new StringBuilder("· ");
                 boolean first = true;
@@ -463,14 +481,19 @@ public class Update {
                 }
                 t = row.toString();
             } else if (t.startsWith("## ") || t.startsWith("### ")) {
-                t = t.replaceFirst("^#{2,3}\\s*", "");
-                if (sb.length() > 0) sb.append('\n');        // 小标题前空一行
+                pendingHead = stripHashes(t);
+                continue;
             } else if (t.startsWith("- ") || t.startsWith("* ")) {
                 t = "· " + t.substring(2);
             } else if (t.startsWith("> ")) {
                 t = t.substring(2);
             }
 
+            if (pendingHead != null) {
+                if (sb.length() > 0) { sb.append('\n'); sb.append('\n'); }
+                sb.append(pendingHead);
+                pendingHead = null;
+            }
             t = t.replace("**", "").replace("`", "");
             if (sb.length() > 0) sb.append('\n');
             sb.append(t);
