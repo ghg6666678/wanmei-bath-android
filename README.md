@@ -138,6 +138,10 @@ python tools/audit_apk.py --config ../web-app/config.json
 
 从最初的构想到 1.0.3 的完整流程、关键决策和踩过的坑，见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
+## 其他设计稿
+
+- [消费记录的本地缓存与增量刷新](docs/RECORDS_CACHE.md) —— 设计稿，未实现
+
 ## 接口文档
 
 说明这套客户端跟服务器之间「发生了什么、边界在哪」，见 [docs/API.md](docs/API.md)。这是一份**设计说明，不是对接手册**：请求地址、参数、算法与字段名都不展开——第三方服务的使用条款通常禁止反向工程与再发布相关资料，所以只保留「做过什么、为什么这么做」。
