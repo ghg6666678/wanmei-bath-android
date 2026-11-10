@@ -13,18 +13,18 @@
 
 ## 下载
 
-最新版 **1.1.0**（versionCode 7，66,376 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——两个节点都在 Cloudflare 上，无代理直连实测可下：
+最新版 **1.1.1**（versionCode 8，70,472 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——两个节点都在 Cloudflare 上，无代理直连实测可下：
 
 ```
-https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
-https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.0/release/zhishui-1.1.0.apk
+https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.1/release/zhishui-1.1.1.apk
+https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.1/release/zhishui-1.1.1.apk
 ```
 
-- SHA-256 `a6f8e6f01c89a99a662736aeeb63cc4f33a49e57eb7367f2e383b273407a4ac0`
+- SHA-256 `e3afc7a2f5c8e0e5e6bed84a8d2d987c9c6f374ec7a5be27702bba0c62bc1df7`
 - 与历史版本同一张证书，可直接覆盖安装，登录态不会丢
 - 全部版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
 
-> 路径里的 `@v1.1.0` 固定指向这一版，不会因为仓库更新而变化。发新版时这里的地址会跟着换。
+> 路径里的 `@v1.1.1` 固定指向这一版，不会因为仓库更新而变化。发新版时这里的地址会跟着换。
 
 ## 功能
 
