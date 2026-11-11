@@ -419,10 +419,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
         <div class="val"><span id="notifyStateVal">—</span><i>›</i></div>
       </div>
     </section>
-    <div class="tipnote">
-      验证码会以<strong>明文</strong>显示在锁屏和状态栏，拿到手机的人也能看到。
-      不想这样，关掉应用级「允许通知」即可 —— 已实测：关掉后实时活动开关会一并隐藏、流体云消失，
-      验证码仍可在 App 内查看。这条开关由系统保存，App 不会替你改，也不会反复提醒你打开。
+    <div class="warnbox" style="margin:10px 4px 14px">
+      <strong>注意：验证码会明文显示在锁屏和状态栏</strong>，拿到手机的人也能看到。<br>
+      不想显示，关掉「允许通知」或「实时活动」开关即可。
     </div>
 
     <div class="sec-title"><h3>账号</h3></div>
@@ -916,9 +915,8 @@ function notifySetupHint() {
       + '实时活动会以流体云显示，<strong>不受锁屏通知等细项设置的影响</strong>，开这一个开关就够了。<br>'
       + '在「应用通知」页「允许通知」下方找到 <strong>流体云显示实时活动</strong>'
       + '（澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。<br>'
-      + '<span style="opacity:.9">验证码会<strong>明文</strong>显示在锁屏上。不想让别人看到，'
-      + '关掉应用级「允许通知」即可（已实测：关掉后这个开关与流体云都会消失），'
-      + '验证码仍可在 App 内查看。</span><br>'
+      + '<span style="opacity:.9">验证码会<strong>明文</strong>显示在锁屏上。'
+      + '不想显示，关掉「允许通知」或「实时活动」开关即可。</span><br>'
       + '<span style="opacity:.85">' + state + '</span><br>'
       + diagLine + buttons + '</div>';
   }
@@ -937,8 +935,7 @@ function notifySetupHint() {
     + '④ 同一子类别 → 打开「锁屏显示」<br>'
     + '<span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span><br>'
     + '<span style="opacity:.6;font-size:.92em">本机未提供实时活动接口，按上面设置锁屏通知即可。</span><br>'
-    + '<span style="opacity:.9">验证码会明文显示在锁屏上；不想让别人看到，关掉「允许通知」即可，'
-    + '验证码仍可在 App 内查看。</span><br>'
+    + '<span style="opacity:.9">验证码会明文显示在锁屏上；不想显示，关掉「允许通知」即可。</span><br>'
     + buttons + '</div>';
 }
 
