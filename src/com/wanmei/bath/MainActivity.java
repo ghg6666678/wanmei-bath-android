@@ -416,18 +416,14 @@ public class MainActivity extends android.app.Activity {
     private static final int REQ_NOTIFY = 1001;
 
     /* Android 16 QPR1 起，「请求提升」靠的是 extras 里的这个键，不是 flag。
-       AndroidX 的 NotificationCompat.Builder.setRequestPromotedOngoing(true)
-       内部就是往 extras 写它（源码注释说明字段名抄自 android.app.Notification）。
-       官方文档把它列为实时更新的硬性条件之一。 */
+       平台常量名是 Notification.EXTRA_REQUEST_PROMOTED_ONGOING，
+       Notification.Builder.setRequestPromotedOngoing(boolean) 的方法体就是
+       getExtras().putBoolean(它, true)；AndroidX 的同名方法做的是同一件事。
+       本地编译用的是 platform-36 rev2（Android 16 初版），这个 QPR1 常量
+       还没进 public SDK，所以这里保留一份字面量并注明出处——它是数据键，
+       不是反射调用，写错也只是被系统忽略。
+       注意：这是唯一剩下的字符串常量，等 SDK 升到 QPR1 对应版本后可换成平台常量。 */
     private static final String EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing";
-    private static final String EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText";
-
-    /* FLAG_PROMOTED_ONGOING（API 36）= 262144 (0x40000)，是【系统】给合格通知
-       打上的结果标记，应用不能自己设：AOSP NotificationManagerService 明确有
-       「notification.flags &= ~FLAG_PROMOTED_ONGOING; // Apps cannot set this flag」。
-       这里仍保留一次兼容写入（少数 ROM 可能直接读应用设的位），写错也无害。
-       真正决定是否提升的，是下面的 EXTRA_REQUEST_PROMOTED_ONGOING + 通知特征。 */
-    private static final int FLAG_PROMOTED_ONGOING = 262144;
 
     /* 用户还没授权时先把要发的内容存着，授权回来再补发，
        免得「第一次装完正好有预约」这个场景白发一次 */
@@ -515,13 +511,21 @@ public class MainActivity extends android.app.Activity {
                             .setContentIntent(pendingOpenApp());
 
             /* 给通知加上「可被提升」的特征（Android 16 实时通知 / 上岛）。
-               是否真的被提升由系统决定，不在这里判断——见 applyLiveUpdateFlavor 注释。 */
-            applyLiveUpdateFlavor(b, c, room);
+               是否真的被提升由系统决定，不在这里判断——见 applyLiveUpdateFlavor 注释。
+
+               【必须单独隔离】增强里调的是 API 36 方法；万一某个 ROM 的实现
+               缺方法会抛 NoSuchMethodError（是 Error 不是 Exception），外层
+               catch (Exception) 根本抓不住，会把整条普通通知一起吞掉。
+               这里用 catch (Throwable) 兜住，再无条件执行 notify()。
+               1.1.3.14 前这两步同处一个 try，是真实存在的健壮性缺口。 */
+            try {
+                applyLiveUpdateFlavor(b, c, room);
+            } catch (Throwable ignored) { }
 
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(NID_CODE, b.build());
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
             // 通知失败不能影响取码主流程
         }
     }
@@ -611,89 +615,97 @@ public class MainActivity extends android.app.Activity {
 
     /* ---------- Android 16 原生实时通知（Live Updates）----------
        这是「上岛」的第三条路：不是厂商私有 SDK，也不需要白名单。
-       我们按标准发一条「持续进行中」的通知，系统决定把它渲染成什么形态
+       按标准发一条「持续进行中」的通知，系统决定把它渲染成什么形态
        —— 兼容这套标准的 ROM（ColorOS 16 流体云、HyperOS 超级岛等）会把
        它提升成岛/云/窗；不兼容就退化成普通常驻通知，不会出错。
 
-       因为本地只编译到 SDK 34，下面这些 API 全走反射，任何一步失败都
-       安静退回普通通知（安全失败）。 */
+       1.1.3.14 起 compileSdk 升到 36（platform-36 rev2），照 InstallerX-Revived
+       的 Modern/Legacy 思路按 SDK 分流：API 36 的调用全部收进 LiveUpdate36
+       这个独立类，低版本系统永远不会加载它；其余全是编译期可见的公开 API，
+       不再有任何反射。QPR1 才公开的「请求提升」常量仍是唯一的数据键字面量。
+
+       【不涉及 Shizuku】InstallerX 里的 Shizuku 属于安装器引擎的授权方式，
+       和通知发送没有任何关系；它的小米岛适配走的是 MIUI 私有 extras，我们
+       也不照搬。这里只用 AOSP 标准 Live Updates，清单权限一个都不加。 */
+
+    /** API 36 专用分支。做成独立类，是为了低版本系统根本不会去解析这些
+        方法引用（等价于 InstallerX 的 @RequiresApi(BAKLAVA) 独立 Builder）。 */
+    private static final class LiveUpdate36 {
+        static void apply(android.app.Notification.Builder b, String code, String room) {
+            /* 请求提升。QPR1 的 Notification.Builder.setRequestPromotedOngoing(true)
+               方法体就是写这个 extra；platform-36 rev2 的 public SDK 还没收录该
+               常量，所以这里用上面那份带出处注释的字面量。不是反射。
+               先写它：后面任何一步出意外，请求提升的数据也已经在 extras 里了。 */
+            b.getExtras().putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true);
+            /* 芯片文案：平台方法，内部写 android.shortCriticalText。
+               @FlaggedApi，个别 ROM 上 flag 没开可能取不到，单独兜住，
+               别让它挡住后面的样式设置。 */
+            try {
+                b.setShortCriticalText(code);
+            } catch (Throwable ignored) { }
+            /* 兼容写入：系统按规范会清掉应用自设的结果标记（Apps cannot set
+               this flag），只照顾极少数直接读该位的 ROM；不再是请求提升的手段。 */
+            try {
+                b.setFlag(android.app.Notification.FLAG_PROMOTED_ONGOING, true);
+            } catch (Throwable ignored) { }
+            /* 文本类卡片：标题是验证码，下面一行是浴室名 + 当日有效 */
+            b.setStyle(new android.app.Notification.BigTextStyle()
+                    .setBigContentTitle(code)
+                    .bigText(room + " · 当日有效"));
+        }
+        static boolean canPost(android.app.NotificationManager nm) {
+            return nm.canPostPromotedNotifications();
+        }
+        static boolean chars(android.app.Notification n) {
+            return n.hasPromotableCharacteristics();
+        }
+        static String shortText(android.app.Notification n) {
+            return n.getShortCriticalText();
+        }
+    }
 
     /** 「我能不能被提升」只用于向用户解释，【不再】用它决定要不要补这些特征。
         它的默认值就是 true，而之前却因为在部分 ROM 上取不到（API 未开放 /
         反射失败）就把整条路挡死——典型的把探测当开关。
         返回 yes / no / no_api / err:xxx */
     private String promotedSupport() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return "no_api";
         try {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm == null) return "no_service";
-            java.lang.reflect.Method m = android.app.NotificationManager.class
-                    .getMethod("canPostPromotedNotifications");
-            Object r = m.invoke(nm);
-            if (!(r instanceof Boolean)) return "bad_ret";
-            return ((Boolean) r) ? "yes" : "no";
-        } catch (NoSuchMethodException e) {
+            return LiveUpdate36.canPost(nm) ? "yes" : "no";
+        } catch (NoSuchMethodError e) {
             return "no_api";
         } catch (Throwable t) {
             return "err:" + t.getClass().getSimpleName();
         }
     }
 
-    /** 兼容写入：绝大多数 ROM 会按规范清掉应用自带的这个位，属于「无害但别指望」。
-        【不要】把它当成请求提升的手段，见 applyLiveUpdateFlavor。 */
-    private void requestPromoted(android.app.Notification.Builder b) {
-        try {
-            b.getClass().getMethod("setFlag", int.class, boolean.class)
-                    .invoke(b, FLAG_PROMOTED_ONGOING, true);
-        } catch (Throwable ignored) { }
-    }
-
-    /** 给通知补上「可被提升」所需的特征。
-        依据官方《创建实时更新通知》(Android 16 QPR1) + 能实际上岛的
-        InstallerX-Revived / ModernNotificationBuilder.kt：
+    /** 给通知补上「可被提升」所需的特征，按 SDK 分流（照 InstallerX-Revived
+        的 Modern / Legacy 双 Builder 结构，只是我们用平台 API 而非 AndroidX）。
           必须声明 POST_PROMOTED_NOTIFICATIONS（清单里已加）
           必须【请求提升】：extras 里写 android.requestPromotedOngoing=true
           必须 ongoing、有 contentTitle、无自定义视图、非分组摘要
           样式须为 Standard / BigText / Call / Progress / Metric
           通道 importance 不能是 IMPORTANCE_MIN（这里是 DEFAULT）
-          【不能】setColorized(true)——官方硬性要求，AOSP 旧分支那套
-          「isColorizedRequested 才算可提升」的判定已经不适用于 QPR1。
+          【不能】setColorized(true)——QPR1 判定里明确要求 !isColorizedRequested
 
-        1.1.3.11 起刻意【不用】ProgressStyle：它是「进度类」实时卡片，
-        必然画一条进度条。我们的验证码没有进度可表示，画出来的条毫无意义。
-        改用 BigTextStyle（同样在可提升样式白名单内），系统会走「文本类」
-        卡片——图标 + 芯片/标题上的验证码，正是系统「取单码提醒」那种排版。
-        AOSP Notification.hasPromotableStyle() 对 null / BigTextStyle 都返回 true，
-        去掉进度样式不会让通知失去被提升的资格。
-        @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码 */
+        刻意【不用】ProgressStyle：它是「进度类」实时卡片，必然画一条进度条，
+        而我们的验证码没有进度可表示。改走 BigTextStyle 的「文本类」卡片——
+        图标 + 芯片/标题上的验证码，正是系统「取单码提醒」那种排版。
+        @param code 状态栏芯片/岛上显示的验证码 */
     private void applyLiveUpdateFlavor(android.app.Notification.Builder b,
-                                       String shortText, String room) {
-        /* 关键：请求提升。AndroidX 的 setRequestPromotedOngoing(true) 就是
-           b.getExtras().putBoolean("android.requestPromotedOngoing", true)，
-           没有别的动作。之前设 FLAG_PROMOTED_ONGOING 是错的：那个位是系统
-           给通知打的「结果」，应用设了会被系统清掉，等于从来没请求过。 */
-        b.getExtras().putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true);
-        // 若平台自身提供了这个方法，也调一次（幂等）；没有就只靠 extras
-        try {
-            b.getClass().getMethod("setRequestPromotedOngoing", boolean.class)
-                    .invoke(b, true);
-        } catch (Throwable ignored) { }
-        requestPromoted(b);   // 兼容少数直接读 flag 的 ROM
-
-        /* 芯片上的极短文案（官方建议 ≤7 字符），反射 + extras 双写兜底 */
-        try {
-            b.getClass().getMethod("setShortCriticalText", String.class)
-                    .invoke(b, shortText);
-        } catch (Throwable ignored) { }
-        b.getExtras().putString(EXTRA_SHORT_CRITICAL_TEXT, shortText);
-
-        /* 文本类卡片：不设任何进度段，就一条标题（验证码）+ 一行地点。
-           setBigContentTitle 再写一次验证码，保证展开后的大视图里最显眼的
-           仍然是那串数字，而不是「浴室名」。不要再往 bigText 里塞说明文字，
-           系统「取单码」卡片之所以清爽，就是因为它只有码。 */
-        b.setStyle(new android.app.Notification.BigTextStyle()
-                .setBigContentTitle(shortText)
-                .bigText(room));
+                                       String code, String room) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            LiveUpdate36.apply(b, code, room);
+        } else {
+            /* 低版本：不带任何 API 36 调用，但保留同样的展开排版。
+               BigTextStyle 从 API 16 就有，两边观感一致。 */
+            b.setStyle(new android.app.Notification.BigTextStyle()
+                    .setBigContentTitle(code)
+                    .bigText(room + " · 当日有效"));
+        }
     }
 
     /** 读回自己那条通知，看系统最终有没有把它提升，以及为什么没提升。
@@ -710,10 +722,10 @@ public class MainActivity extends android.app.Activity {
             int flags = 0;
             String req = "", shortText = "", style = "";
             boolean colorized = false;
-            /* 1.1.3.11 起用来确认「倒计时来源已彻底关掉」：
-               android.showWhen / android.showChronometer 都是 Notification 的公开
-               extras 键，读回来就能核对，不用靠肉眼猜。 */
+            /* 这几个键在 SDK 34 起就是 Notification 的公开常量，直接引用，
+               不再写字面量、也不再反射。用来确认倒计时来源确实关掉了。 */
             boolean showWhen = true, chron = false;
+            boolean modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA;
             if (nm != null) {
                 android.service.notification.StatusBarNotification[] act =
                         nm.getActiveNotifications();
@@ -724,25 +736,32 @@ public class MainActivity extends android.app.Activity {
                         if (n == null) continue;
                         found = true;
                         flags = n.flags;
-                        flagged = (flags & FLAG_PROMOTED_ONGOING) != 0;
+                        // 编译期内联的 int 常量，低版本运行也不会触发类解析
+                        flagged = (flags & android.app.Notification.FLAG_PROMOTED_ONGOING) != 0;
                         if (n.extras != null) {
                             req = n.extras.getBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, false)
                                     ? "yes" : "no";
-                            shortText = n.extras.getString(EXTRA_SHORT_CRITICAL_TEXT, "");
-                            colorized = n.extras.getBoolean("android.colorized", false);
-                            showWhen = n.extras.getBoolean("android.showWhen", true);
-                            chron = n.extras.getBoolean("android.showChronometer", false);
+                            colorized = n.extras.getBoolean(
+                                    android.app.Notification.EXTRA_COLORIZED, false);
+                            showWhen = n.extras.getBoolean(
+                                    android.app.Notification.EXTRA_SHOW_WHEN, true);
+                            chron = n.extras.getBoolean(
+                                    android.app.Notification.EXTRA_SHOW_CHRONOMETER, false);
+                            // 样式类名存在 EXTRA_TEMPLATE，无需反射 getNotificationStyle()
+                            String tpl = n.extras.getString(
+                                    android.app.Notification.EXTRA_TEMPLATE, "");
+                            if (tpl != null && !tpl.isEmpty()) {
+                                int i = Math.max(tpl.lastIndexOf('.'), tpl.lastIndexOf('$'));
+                                style = tpl.substring(i + 1);
+                            }
                         }
-                        try {
-                            Object r = android.app.Notification.class
-                                    .getMethod("hasPromotableCharacteristics").invoke(n);
-                            chars = (r instanceof Boolean) && ((Boolean) r);
-                        } catch (Throwable ignored) { }
-                        try {
-                            Object r = android.app.Notification.class
-                                    .getMethod("getNotificationStyle").invoke(n);
-                            if (r instanceof Class) style = ((Class<?>) r).getSimpleName();
-                        } catch (Throwable ignored) { }
+                        if (modern) {
+                            try {
+                                chars = LiveUpdate36.chars(n);
+                                String sct = LiveUpdate36.shortText(n);
+                                if (sct != null) shortText = sct;
+                            } catch (Throwable ignored) { }
+                        }
                         break;
                     }
                 }

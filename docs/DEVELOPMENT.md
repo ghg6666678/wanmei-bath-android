@@ -685,14 +685,15 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 
 > 早期版本曾断言「只有厂商白名单这条路」，那是错的——漏了这条官方标准通路。InstallerX-Revived 等开源项目走的正是它。
 
-#### 实现：编译期只到 SDK 34，所以全走反射
+#### 实现：~~编译期只到 SDK 34，所以全走反射~~ → 1.1.3.14 起已升级
 
-本地构建链只有 `platform-34`，而 Live Updates 是 API 36，因此不新增编译依赖，改用反射（失败即安静退回普通通知）：
+~~本地构建链只有 `platform-34`，而 Live Updates 是 API 36，因此不新增编译依赖，改用反射（失败即安静退回普通通知）。~~
+**1.1.3.14 起 compileSdk 升到 36，改为按 SDK 分流 + 直接调用平台 API，反射清零。**详见 12.6。下面这张表是 1.1.3.4～1.1.3.13 的历史实现，保留供对照：
 
 | 用途 | API | 说明 |
 | --- | --- | --- |
 | **声明权限** | `<uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />` | **缺了它，系统设置里连「流体云显示实时活动」开关都不出现**（对照 InstallerX-Revived 的清单确认） |
-| ~~请求提升~~ | ~~`FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)`~~ | ~~平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装，内部就是设这个位~~ → **错，见 12.2**：那个位是系统打的结果，应用设了会被清掉 |
+| ~~请求提升~~ | ~~`FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)`~~ | ~~平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装，内部就是设这个位~~ → **两句都错，见 12.2 / 12.6**：那个位是系统打的结果；而 QPR1 平台**确实有** `Notification.Builder.setRequestPromotedOngoing(boolean)`，只是 `platform-36 rev2` 的 public SDK 尚未收录 |
 | **请求提升（正确做法）** | extras 写 `android.requestPromotedOngoing=true` | 等价于 AndroidX `NotificationCompat.Builder.setRequestPromotedOngoing(true)`；官方硬性条件，详见 12.2 |
 | 岛/芯片文案 | `Builder.setShortCriticalText(String)` | 直接放验证码（6 位，符合官方「≤7 字符」建议）；同时写 extras 兜底 |
 | 进度形态 | `ProgressStyle.setProgress(int)` + `setStyledByProgress(true)` | 不设 segments 时 max 默认 100，故直接传百分比 |
@@ -710,7 +711,7 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | --- | --- |
 | 锁屏直接看到 | `VISIBILITY_PUBLIC`：即使系统开了「隐藏敏感通知内容」也强制露出 |
 | 验证码最醒目 | 验证码放 `setContentTitle`，浴室名退到 `setContentText`（同一栋楼不变，每次要读的是那六位数字） |
-| 倒计时 | `chronometer + setChronometerCountDown`，传已校准的绝对失效时刻，系统每秒自己走 |
+| ~~倒计时~~ | ~~`chronometer + setChronometerCountDown`，传已校准的绝对失效时刻，系统每秒自己走~~ → **1.1.3.11 已删除**，那串 `HH:MM:SS` 对静态验证码毫无意义，见 12.3 |
 | 到点消失 | `setTimeoutAfter`，不用定时器 |
 | App 关了还在 | 通知由系统托管，**不需要前台服务** |
 
@@ -735,6 +736,8 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 bash tools/build.sh
 python tools/audit_apk.py <产物.apk>
 ```
+
+~~任意 API 34+ 的 platform 都能编译~~ → **1.1.3.14 起需要 `android-36` 或更高**：`MainActivity` 直接调用 API 36 的公开方法，旧 android.jar 会直接报找不到符号（脚本已加检查给出可操作提示）。`targetSdkVersion` 仍是 34、`minSdkVersion` 仍是 26，升级的只是编译期类型检查。
 
 前端唯一源是 `assets/index.html`，改完需同步到构建用的副本后再打包。
 
@@ -774,7 +777,7 @@ python tools/audit_apk.py <产物.apk>
 
 **1.1.3.10 的改动**：
 
-1. `applyLiveUpdateFlavor()` 用 `b.getExtras().putBoolean("android.requestPromotedOngoing", true)` 请求提升（`Builder.build()` 会把 `getExtras()` 合并进 `Notification.extras`，已在 AOSP 源码确认）；平台若有 `setRequestPromotedOngoing(boolean)` 再反射调一次作双保险。`setShortCriticalText` 也改成方法 + extras 双写兜底。
+1. `applyLiveUpdateFlavor()` 用 `b.getExtras().putBoolean("android.requestPromotedOngoing", true)` 请求提升（`Builder.build()` 会把 `getExtras()` 合并进 `Notification.extras`，已在 AOSP 源码确认）；平台若有 `setRequestPromotedOngoing(boolean)` 再反射调一次作双保险。`setShortCriticalText` 也改成方法 + extras 双写兜底。~~平台没有这个方法，那只是 AndroidX 的封装~~ → **这句判断错了**：AOSP `android16-qpr1-release` 的 `Notification.java:5555` 确有 `public Builder setRequestPromotedOngoing(boolean)`，只是当时用的 `platform-36 rev2` public SDK 未收录（见 12.6）。
 2. 手设 `FLAG_PROMOTED_ONGOING` 降级为「兼容少数直接读 flag 的 ROM」，注释写明它按规范会被清掉。
 3. `notifyStatus()` 增加 `diag`：读回自己那条通知的 `found / req / short / style / colorized / chars / flagged / flags / canPost`。前端据此分四种情况给文案，不再用探测结果冒充结论。
 4. 新增桥 `openPromotedSettings()`：优先 `android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS`（AOSP 常量名），退而求其次 `android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS`（文档写法），都不存在就回应用通知总设置页。~~这个独立入口保留下来~~——**1.1.3.12 已删除**，理由见 12.4：它和「去设置」实际落到同一页。
@@ -867,6 +870,49 @@ python tools/audit_apk.py <产物.apk>
 网页版不涉及锁屏通知，无需同步改动。`latest.json` 仍指向线上 1.1.3，未动。
 
 **版本**：按约定继续留在 1.1.3.x，**1.1.3.13 / versionCode 24**。仅本地提交，未打 tag、未推送、未发布。
+
+---
+
+### 12.6 升级 compileSdk 到 36，反射清零（1.1.3.14）
+
+用户提出：与其继续用反射硬编码去够 API 36，不如升级 SDK、照 InstallerX-Revived 的方式写通知；但**不必为了小米机型去申请 Shizuku 权限**。同时要求把「当日有效」加回浴室那一行。
+
+**先纠正两个此前的错误结论**（都用删除线保留在 12.1 / 12.2）：
+
+- ~~平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装~~ —— 错。AOSP `android16-qpr1-release` 的 `Notification.java:5555` 明确有 `public Builder setRequestPromotedOngoing(boolean)`，方法体就是 `getExtras().putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, v)`。之前对着 `android16-release` / `main` 分支和 `platform-36 rev2` 的 public SDK 判断，两个都不是 QPR1。
+- ~~QPR1 的 `hasPromotableCharacteristics()` 只看旧判定~~ —— 同一分支里 `Flags.uiRichOngoing()` 为真时走的是 `isRequestPromotedOngoing() && isOngoingEvent() && hasTitle() && hasPromotableStyle() && !isGroupSummary() && !containsCustomViews() && !isColorizedRequested()`，正好印证我们不设 colorized、写 extra 的做法。
+
+**SDK 实际情况**（下载 `platform-36_r02.zip` 与 `platform-36-ext19_r01.zip` 后逐个 `javap` 核对）：
+
+| 符号 | platform-36 rev2 | 说明 |
+| --- | --- | --- |
+| `Notification.Builder.setShortCriticalText(String)` | ✅ public | 可直接调用 |
+| `Notification.Builder.setFlag(int, boolean)` | ✅ public | 可直接调用 |
+| `Notification.FLAG_PROMOTED_ONGOING = 262144` | ✅ public 常量 | 换掉硬编码数字 |
+| `Notification.getShortCriticalText()` / `hasPromotableCharacteristics()` | ✅ public | 诊断直接调用 |
+| `NotificationManager.canPostPromotedNotifications()` | ✅ public | 诊断直接调用 |
+| `Notification.EXTRA_{SHOW_WHEN,SHOW_CHRONOMETER,COLORIZED,TEMPLATE}` | ✅ public 常量 | 换掉字符串字面量 |
+| `Notification.Builder.setRequestPromotedOngoing(boolean)` | ❌ 未收录 | QPR1 才有；`ext19` 也没有 |
+| `Notification.EXTRA_REQUEST_PROMOTED_ONGOING` | ❌ 未收录 | 同上 |
+| `Manifest.permission.POST_PROMOTED_NOTIFICATIONS` | ❌ 未收录 | 清单里本来就是字符串，不受影响 |
+
+所以**唯一保留的字面量**是 `android.requestPromotedOngoing`——但它是 `Bundle` 的数据键，不是反射、不是方法调用，而且正是 AndroidX 与 QPR1 平台共用的键名。等 public SDK 收录该常量即可一行替换。
+
+**改动**：
+
+1. `compileSdk` 升到 36：`build/build.sh` 的 `PLAT` 指向 `sdk/android-36/android.jar`（来自 `platform-36_r02.zip`）。**`targetSdkVersion=34` / `minSdkVersion=26` / `--target-sdk-version 34` / `--min-api 26` 全部不动**；`aapt2 link -I` 也仍用原来的 SDK 34 资源表，避免给低版本设备引入无谓的资源差异。升级范围严格限定在 Java 编译期类型检查。
+2. 照 InstallerX 的 `ModernNotificationBuilder` / `LegacyNotificationBuilder` 结构做**按 SDK 分流**：所有 API 36 调用收进 `private static final class LiveUpdate36`，`SDK_INT >= Build.VERSION_CODES.BAKLAVA` 时才进入；低版本走纯 API 26 的分支，永远不加载这个类。`javap -c` 已验证 `BAKLAVA`、`FLAG_PROMOTED_ONGOING`、`EXTRA_*` 都被编译期内联成字面量，低版本不会触发类解析失败。
+3. **反射清零**：`getMethod` / `Class.forName` 从 dex 中消失；`setShortCriticalText`、`canPostPromotedNotifications`、`hasPromotableCharacteristics`、`getShortCriticalText`、`setFlag` 全是直接 `invokevirtual`；样式改用 `EXTRA_TEMPLATE` 读回，不再反射 `getNotificationStyle()`。
+4. **修掉上一轮指出的健壮性缺口**：`applyLiveUpdateFlavor()` 单独包 `try/catch(Throwable)`，外层 `notifyOrderCode` 也改成 `catch (Throwable)`。此前增强与 `nm.notify()` 同处一个 `try`，而 `NoSuchMethodError` 是 `Error` 不是 `Exception`，一旦某个 ROM 缺 API 36 方法就会把**整条普通通知一起吞掉**。现在无论增强发生什么，`nm.notify()` 都一定执行。
+5. **「当日有效」加回** `BigTextStyle.bigText()`（两条分支都是 `room + " · 当日有效"`）。1.1.3.11 为了「像系统取单码卡片一样只有码」把它精简掉了，但 `contentText` 一直留着这句，实时活动展开时 `bigText` 覆盖 `contentText`，于是流体云上看不见——这次统一。
+6. `tools/build.sh` 加了编译期下限检查：platform 低于 36 直接报错并提示 `ANDROID_PLATFORM=.../android-36`，不再让人看到一堆「找不到符号」猜原因。
+7. 把 1.1.3.11 起不再适用的旧表格行（倒计时、全反射、任意 platform 可编译）用删除线标注。
+
+**关于 Shizuku（明确不做）**：InstallerX 里的 Shizuku 属于安装器引擎的授权方式（`Authorizer.Shizuku`）；它唯一与通知相关的用法是 `SessionNotifierImpl.notifyWithXiaomiMagic()` —— 小米 MIUI 私有岛要临时切断 `xmsf` 进程网络来骗过系统校验，才需要 `appOps` 权限。那是**厂商私有路径**的 hack，和 AOSP 标准 Live Updates 无关。小米机型在 HyperOS 上走的是同一套 Google 标准，**本实现不申请 Shizuku、不新增任何权限、不做 MIUI 私有 extras 适配**；清单仍是 INTERNET / ACCESS_NETWORK_STATE / POST_NOTIFICATIONS / POST_PROMOTED_NOTIFICATIONS 四项。
+
+**为什么不引入 AndroidX**：InstallerX 用 `NotificationCompat.Builder`，好处是兼容层替它处理版本差异。本项目是手工 `aapt2 + javac + d8` 的单 dex 构建（约 87 KB），引入 AAR 要处理资源合并、`R` 类冲突、传递依赖与体积膨胀。既然 compileSdk 36 已经让平台 API 直接可用，按 SDK 自己做一次分流即可达到同样的效果，不值得为此改构建链。
+
+**版本**：按约定继续留在 1.1.3.x，**1.1.3.14 / versionCode 25**。仅本地提交，未打 tag、未推送、未发布。
 
 ---
 

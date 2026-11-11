@@ -9,8 +9,14 @@
 # 通过环境变量指定 SDK（都不设则用 $ANDROID_SDK 的标准布局）：
 #   ANDROID_SDK            SDK 根目录
 #   ANDROID_BUILD_TOOLS    build-tools 目录，例如 $ANDROID_SDK/build-tools/34.0.0
-#   ANDROID_PLATFORM       platform 目录，例如 $ANDROID_SDK/platforms/android-34
+#   ANDROID_PLATFORM       platform 目录，1.1.3.14 起【必须是 android-36 或更高】
 #   KEYSTORE_PASS          签名密码（默认 bath123，仅自用）
+#
+# 为什么要求 36：MainActivity 直接调用 Notification.Builder.setShortCriticalText /
+# Notification.FLAG_PROMOTED_ONGOING / NotificationManager.canPostPromotedNotifications
+# 这些 API 36 公开方法（不再反射）。用旧 android.jar 编译会直接报找不到符号，
+# 而不是悄悄地退化——这是有意的，能挡住「用错 SDK 还以为构建成功」。
+# 注意 targetSdkVersion 仍是 34，升级的只是编译期类型检查。
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -39,6 +45,12 @@ fi
 PLATJAR="$PLAT/android.jar"
 echo "build-tools: $BT"
 echo "platform   : $PLAT"
+# 编译期硬下限：低于 36 就没有上面那些 API，直接给出可操作的提示
+if [ ! -f "$PLATJAR" ] || ! javap -classpath "$PLATJAR" 'android.app.Notification$Builder' 2>/dev/null | grep -q "setShortCriticalText"; then
+  echo "错误：需要 API 36 (android-36) 或更高的 platform，当前：$PLAT" >&2
+  echo "     请设置 ANDROID_PLATFORM=\$ANDROID_SDK/platforms/android-36" >&2
+  exit 1
+fi
 
 rm -rf "$OUT"
 mkdir -p "$OUT/compiled" "$OUT/classes" "$OUT/dex"
