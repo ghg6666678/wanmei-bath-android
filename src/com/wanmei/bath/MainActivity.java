@@ -541,31 +541,25 @@ public class MainActivity extends android.app.Activity {
         return o.toString();
     }
 
-    /** 跳到本应用「验证码显示」这个类别的设置页，用户一步就能关掉静默、打开锁屏显示。 */
+    /** 跳到本应用的「通知」总设置页（母类）。
+        故意【不】直达子类别：母类一旦关掉「允许通知」或「锁屏显示通知」，
+        子类别里的开关会被系统隐藏或置灰，用户进去也改不了——反而卡在死路上。
+        所以统一停在母类，让用户先开父级，再自己往下点「验证码显示」。 */
     private void gotoCodeNotifySettings() {
         try {
-            Intent i = new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            Intent i = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
             i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
-            i.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_CODE);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
         } catch (Exception e) {
-            // 个别 ROM 没有类别页，退回应用通知总设置，再不行退回应用详情
+            // 少数 ROM 没有这个页面，退回应用详情页
             try {
-                Intent i2 = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                i2.putExtra("app_package", getPackageName());
-                i2.putExtra("app_uid", getApplicationInfo().uid);
+                Intent i2 = new Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                i2.setData(Uri.parse("package:" + getPackageName()));
                 i2.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(i2);
-            } catch (Exception e2) {
-                try {
-                    Intent i3 = new Intent(
-                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    i3.setData(Uri.parse("package:" + getPackageName()));
-                    i3.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(i3);
-                } catch (Exception ignored) { }
-            }
+            } catch (Exception ignored) { }
         }
     }
 
