@@ -367,8 +367,8 @@ public class MainActivity extends android.app.Activity {
         /* ---------- 取码通知：锁屏上直接看验证码 ---------- */
 
         /** 把「浴室名 + 验证码」推到常驻通知。
-            锁屏不点开 App 就能看到；倒计时交给系统渲染（chronometer），
-            到点自动消失（timeoutAfter），不需要额外的定时任务。 */
+            锁屏不点开 App 就能看到；只显示码，不显示倒计时（1.1.3.11 起），
+            到点由 timeoutAfter 静默自动消失，不需要额外的定时任务。 */
         @JavascriptInterface
         public void showOrderCode(String name, String code, long expireAtMs) {
             notifyOrderCode(name, code, expireAtMs);
@@ -490,7 +490,19 @@ public class MainActivity extends android.app.Activity {
             String room = (name == null || name.trim().isEmpty()) ? "已预约" : name.trim();
 
             /* 验证码放标题、浴室名退到副行：同一栋楼不会变，每次要看的是那六个数字，
-               锁屏上标题字号最大、最粗，才是该给它占的位置。 */
+               锁屏上标题字号最大、最粗，才是该给它占的位置。
+               系统自带的「取单码」实时卡片就是这个思路：一个图标 + 一个大号数字，
+               旁边没有多余信息。第三方应用改不了系统卡片的字号（平台会剥掉
+               Notification 里的文字尺寸 span），所以能做的是把「最显眼的字段」
+               全给验证码：芯片文案 shortCriticalText + 通知标题 contentTitle。
+
+               【不要再设 chronometer】之前 setUsesChronometer(true) +
+               setChronometerCountDown(true) + setWhen(失效时刻) 会在普通通知头部
+               和实时卡片里各渲染一串「HH:MM:SS」倒计时。失效时刻往往是当天结束，
+               这串数字对用户没有任何意义。showWhen 也要显式关掉：Android 16 的
+               芯片文案在没有 shortCriticalText 时会退回「距 when 还剩多久」，
+               关掉它才算把倒计时来源彻底断干净。
+               setTimeoutAfter 只是到点自动收掉通知，不产生任何可见文字，保留。 */
             android.app.Notification.Builder b =
                     new android.app.Notification.Builder(this, CH_CODE)
                             .setSmallIcon(R.drawable.ic_stat_bath)
@@ -499,18 +511,15 @@ public class MainActivity extends android.app.Activity {
                             .setContentText(room + " · 当日有效")
                             .setOngoing(true)          // 常驻，划不掉
                             .setOnlyAlertOnce(true)    // 刷新时不重复响铃
-                            .setShowWhen(true)
-                            .setUsesChronometer(true)
-                            .setChronometerCountDown(true)   // 显示「还剩多久」
-                            .setWhen(expireAtMs)
-                            .setTimeoutAfter(left)           // 到点自动消失
+                            .setShowWhen(false)        // 不显示时间/剩余时间
+                            .setTimeoutAfter(left)     // 到点自动消失（不显示倒计时）
                             .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
                             .setCategory(android.app.Notification.CATEGORY_STATUS)
                             .setContentIntent(pendingOpenApp());
 
             /* 给通知加上「可被提升」的特征（Android 16 实时通知 / 上岛）。
                是否真的被提升由系统决定，不在这里判断——见 applyLiveUpdateFlavor 注释。 */
-            applyLiveUpdateFlavor(b, c, room, left);
+            applyLiveUpdateFlavor(b, c, room);
 
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -661,15 +670,22 @@ public class MainActivity extends android.app.Activity {
         依据官方《创建实时更新通知》(Android 16 QPR1) + 能实际上岛的
         InstallerX-Revived / ModernNotificationBuilder.kt：
           必须声明 POST_PROMOTED_NOTIFICATIONS（清单里已加）
-          必须【请求提升】：extras 里写 android.requestPromotedOngoing=true  ← 本次修复的核心
+          必须【请求提升】：extras 里写 android.requestPromotedOngoing=true
           必须 ongoing、有 contentTitle、无自定义视图、非分组摘要
           样式须为 Standard / BigText / Call / Progress / Metric
           通道 importance 不能是 IMPORTANCE_MIN（这里是 DEFAULT）
           【不能】setColorized(true)——官方硬性要求，AOSP 旧分支那套
           「isColorizedRequested 才算可提升」的判定已经不适用于 QPR1。
+
+        1.1.3.11 起刻意【不用】ProgressStyle：它是「进度类」实时卡片，
+        必然画一条进度条。我们的验证码没有进度可表示，画出来的条毫无意义。
+        改用 BigTextStyle（同样在可提升样式白名单内），系统会走「文本类」
+        卡片——图标 + 芯片/标题上的验证码，正是系统「取单码提醒」那种排版。
+        AOSP Notification.hasPromotableStyle() 对 null / BigTextStyle 都返回 true，
+        去掉进度样式不会让通知失去被提升的资格。
         @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码 */
     private void applyLiveUpdateFlavor(android.app.Notification.Builder b,
-                                       String shortText, String room, long leftMs) {
+                                       String shortText, String room) {
         /* 关键：请求提升。AndroidX 的 setRequestPromotedOngoing(true) 就是
            b.getExtras().putBoolean("android.requestPromotedOngoing", true)，
            没有别的动作。之前设 FLAG_PROMOTED_ONGOING 是错的：那个位是系统
@@ -689,27 +705,13 @@ public class MainActivity extends android.app.Activity {
         } catch (Throwable ignored) { }
         b.getExtras().putString(EXTRA_SHORT_CRITICAL_TEXT, shortText);
 
-        /* 样式：优先 ProgressStyle（带进度条，观感最接近岛），
-           取不到就用 BigTextStyle —— 两者都在可提升样式白名单内。
-           给一个长度为 100 的段：不设段时 max 虽默认 100，但 styledByProgress
-           需要有段可着色，否则可能渲染不出提升卡片（对照 InstallerX 的做法）。 */
-        boolean styled = false;
-        try {
-            Class<?> psCls = Class.forName("android.app.Notification$ProgressStyle");
-            Object ps = psCls.getConstructor().newInstance();
-            Class<?> segCls = Class.forName("android.app.Notification$ProgressStyle$Segment");
-            Object seg = segCls.getConstructor(int.class).newInstance(100);
-            psCls.getMethod("addProgressSegment", segCls).invoke(ps, seg);
-            int pct = (int) Math.max(0, Math.min(100, leftMs * 100L / 86400000L));
-            psCls.getMethod("setProgress", int.class).invoke(ps, pct);
-            psCls.getMethod("setStyledByProgress", boolean.class).invoke(ps, true);
-            b.setStyle((android.app.Notification.Style) ps);
-            styled = true;
-        } catch (Throwable ignored) { }
-        if (!styled) {
-            b.setStyle(new android.app.Notification.BigTextStyle()
-                    .bigText(room + "\n当日有效，到浴室设备输入即可开阀。"));
-        }
+        /* 文本类卡片：不设任何进度段，就一条标题（验证码）+ 一行地点。
+           setBigContentTitle 再写一次验证码，保证展开后的大视图里最显眼的
+           仍然是那串数字，而不是「浴室名」。不要再往 bigText 里塞说明文字，
+           系统「取单码」卡片之所以清爽，就是因为它只有码。 */
+        b.setStyle(new android.app.Notification.BigTextStyle()
+                .setBigContentTitle(shortText)
+                .bigText(room));
     }
 
     /** 读回自己那条通知，看系统最终有没有把它提升，以及为什么没提升。
@@ -726,6 +728,10 @@ public class MainActivity extends android.app.Activity {
             int flags = 0;
             String req = "", shortText = "", style = "";
             boolean colorized = false;
+            /* 1.1.3.11 起用来确认「倒计时来源已彻底关掉」：
+               android.showWhen / android.showChronometer 都是 Notification 的公开
+               extras 键，读回来就能核对，不用靠肉眼猜。 */
+            boolean showWhen = true, chron = false;
             if (nm != null) {
                 android.service.notification.StatusBarNotification[] act =
                         nm.getActiveNotifications();
@@ -742,6 +748,8 @@ public class MainActivity extends android.app.Activity {
                                     ? "yes" : "no";
                             shortText = n.extras.getString(EXTRA_SHORT_CRITICAL_TEXT, "");
                             colorized = n.extras.getBoolean("android.colorized", false);
+                            showWhen = n.extras.getBoolean("android.showWhen", true);
+                            chron = n.extras.getBoolean("android.showChronometer", false);
                         }
                         try {
                             Object r = android.app.Notification.class
@@ -762,6 +770,8 @@ public class MainActivity extends android.app.Activity {
             o.put("short", shortText);        // 芯片文案
             o.put("style", style);            // 实际使用的样式
             o.put("colorized", colorized);    // 应为 false（官方禁止 true）
+            o.put("showWhen", showWhen);      // 应为 false：不显示时间
+            o.put("chron", chron);            // 应为 false：没有 HH:MM:SS 倒计时
             o.put("chars", chars);            // 系统认为「具备可提升特征」
             o.put("flagged", flagged);        // 系统已打上 FLAG_PROMOTED_ONGOING
             o.put("flags", flags);

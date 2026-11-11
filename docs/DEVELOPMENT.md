@@ -791,6 +791,33 @@ python tools/audit_apk.py <产物.apk>
 
 ---
 
+### 12.3 上岛之后的格式清理：删倒计时、删进度条（1.1.3.11）
+
+1.1.3.10 在真机上确认流体云已经出现。用户随即提出两处格式问题：普通通知和实时卡片里都有一串看不懂的 `HH:MM:SS`，卡片下面还有一条没有含义的进度条；希望验证码像系统自带的「取单码提醒」那样——一个图标加一个大号数字，旁边什么都没有。
+
+**两处多余元素的来源**
+
+| 现象 | 来源 | 处理 |
+| --- | --- | --- |
+| 普通通知头部、实时卡片上的 `HH:MM:SS` | `setUsesChronometer(true)` + `setChronometerCountDown(true)` + `setWhen(失效时刻)` | 三个调用全删，改 `setShowWhen(false)` |
+| 卡片下方的进度条 | `ProgressStyle` + `addProgressSegment` + `setStyledByProgress(true)` | 整个样式换成 `BigTextStyle` |
+
+- `setWhen()` 传的是当天失效时刻（往往还有十几个小时），这串倒计时对用户没有任何意义。
+- 还要显式关 `showWhen`：AndroidX `setShortCriticalText()` 的 javadoc 写明芯片文案的兜底顺序是 `shortCriticalText` → `MetricStyle` 关键指标 → `Notification.when` 的时间（chronometer 优先）。只要 `when` 还是未来时间且 `showWhen=true`，ROM 就仍有理由把倒计时画进芯片。删 chronometer 而不关 showWhen，等于只关了一半。
+- `setTimeoutAfter(left)` 保留：AOSP 里 `mTimeout` 只是给 `NotificationManagerService` 排一个自动取消的定时任务（`getTimeoutAfter()` 在 NMS 里只被 8801 / 10269 附近引用），不产生任何可见文字。
+
+**为什么「放大数字」不能靠应用自己加 span**：`Notification.safeCharSequence()` 最后一步是 `removeTextSizeSpans()`，平台会主动剥掉 `RelativeSizeSpan` / `AbsoluteSizeSpan`（并对 `TextAppearanceSpan` 抹掉字号）；`StyleSpan(BOLD)` 能留下，但改不了字号。也就是说第三方应用**不能**自己把验证码画成示例里那种超大数字——那是系统「取单码提醒」私有卡片的排版。
+
+能控制的是「哪个字段最显眼」：`shortCriticalText`（状态栏芯片）、`contentTitle`、`BigTextStyle.setBigContentTitle()`（通知标题与展开后的大标题）全部放验证码，副行只留浴室名。去掉进度样式后系统会走**文本类**实时卡片，正是示例那种「图标 + 数字」的形态。~~给标题套 `RelativeSizeSpan` 就能放大验证码~~——这个想法在第一版实现时被提出来，查 `safeCharSequence()` 后否掉了，平台会直接丢掉该 span。
+
+**换样式会不会失去被提升的资格**：不会。AOSP `Notification.hasPromotableStyle()` 对 `null`（Standard）、`BigTextStyle`、`CallStyle`、`ProgressStyle`、`BigPictureStyle` 都返回 `true`，`BigTextStyle` 在白名单内；`EXTRA_REQUEST_PROMOTED_ONGOING`、`POST_PROMOTED_NOTIFICATIONS`、`ongoing`、`contentTitle` 这些条件一个没动。
+
+**顺带补的诊断**：`notifyStatus().diag` 增加 `showWhen` / `chron`（读 `android.showWhen`、`android.showChronometer` 两个公开 extras 键），提示框加一行紧凑读回「胶囊「…」· 倒计时关 · 时间显示关 · 样式 BigTextStyle」，便于不接 adb 也能确认倒计时源确实关掉了。`audit_apk.py` 仍会报 `assets/index.html` 含「学校名 / 实测本校区」模式——那是第 11 节正文里的句子，1.1.3.10 起就是这个告警，属既有的模式误报。
+
+**版本**：按约定继续留在 1.1.3.x，**1.1.3.11 / versionCode 22**。仅本地提交，未打 tag、未推送、未发布。
+
+---
+
 ## 13. 小结
 
 从「想分析客户端」到「发现业务在 H5」，从「必须依赖额外权限与官方客户端」到「手机号 + 验证码纯登录」，从「一个能跑的网页」到「一份可覆盖安装、可审计、可回滚的 APK」——整个过程真正起作用的不是某个技巧，而是几次及时的**边界判断**：
