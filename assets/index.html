@@ -814,6 +814,11 @@ function renderOrder() {
       const nat = __native();
       if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
     };
+    const pfix = $('#btnPromotedFix');
+    if (pfix) pfix.onclick = () => {
+      const nat = __native();
+      if (nat && nat.openPromotedSettings) { try { nat.openPromotedSettings(); } catch (e) { } }
+    };
     const ok = $('#btnNotifyHintOk');
     if (ok) ok.onclick = () => {
       const nat = __native();
@@ -839,8 +844,11 @@ function notifySetupHint() {
   try {
     dismissed = !!(nat.getNotifyHintDismissed && nat.getNotifyHintDismissed() === '1');
   } catch (e) { }
-  /* 权限被明确拒掉属于硬错误，即使点过「知道了」也继续提示 */
-  const hard = st && st.perm === false;
+  /* 权限被明确拒掉、或「实时活动」开关明确没开，属于硬错误，
+     即使点过「知道了」也继续提示；其余按一次提示处理。 */
+  const d = st && st.diag ? st.diag : null;
+  const switchOff = !!(d && d.found && d.chars && !d.flagged && d.canPost === 'no');
+  const hard = !!(st && st.perm === false) || switchOff;
   if (dismissed && !hard) return '';
 
   /* 注意这里【不再】因为 st.ok 为真就跳过提示。
@@ -851,6 +859,24 @@ function notifySetupHint() {
     ? '通知权限还没给。'
     : ((st && st.silent) ? '这条通知现在被归进了「静默通知」，锁屏不会展开它。' : '');
 
+  /* 实时活动这里只报「系统读回来的结果」，不再把
+     canPostPromotedNotifications() 的探测结果说成「系统支持实时通知」——
+     那个接口问的其实是「用户有没有允许本应用发提升通知」，两者不是一回事。 */
+  let liveMsg;
+  if (!d || !d.found) {
+    liveMsg = '实时活动：预约并刷新后，这里会核对系统是否真的把通知提升成状态栏胶囊 / 流体云。';
+  } else if (d.flagged) {
+    liveMsg = '实时活动：已生效 ✓ 系统已把这条通知提升，状态栏胶囊 / 流体云会同步显示。';
+  } else if (d.chars) {
+    liveMsg = '实时活动：通知已满足系统条件，但这次没有被提升。'
+      + (d.canPost === 'no'
+          ? '「流体云显示实时活动」开关没开，点「实时活动」打开后再下拉刷新一次。'
+          : '先下拉刷新重发一次通知；仍不行就检查「流体云显示实时活动」开关。');
+  } else {
+    liveMsg = '实时活动：系统判定这条通知不满足条件（请求提升=' + (d.req || '?')
+      + '，样式=' + (d.style || '?') + '），已降级为普通通知。';
+  }
+
   return `<div class="warnbox" id="notifyHintBox" style="margin:12px 16px 16px;line-height:1.8">
       <strong>想让验证码出现在锁屏上，还需要开一次开关</strong>${why ? '<br>' + why : ''}<br>
       多数手机默认<strong>不</strong>允许锁屏显示通知，按下表开一次即可（之后一直有效）：<br>
@@ -858,16 +884,12 @@ function notifySetupHint() {
       ② 同一页 → 打开「<strong>锁屏显示通知</strong>」（默认常关）<br>
       ③ 子类别「<strong>验证码显示</strong>」→ 关掉「静默通知」<br>
       ④ 同一子类别 → 打开「锁屏显示」<br>
+      ⑤ 安卓 16 手机上，应用通知页里还要打开「<strong>流体云显示实时活动</strong>」（有这一项时才需要）<br>
       <span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span><br>
-      <span style="opacity:.75">${st && st.live
-        ? '系统报告支持实时通知，验证码会尝试显示到状态栏/岛上。'
-        : '系统未报告实时通知能力（' + ({
-            no_api: '系统未提供该查询接口', no: '系统暂不允许', bad_ret: '读取失败',
-            no_service: '通知服务不可用'
-          }[(st && st.liveWhy) || ''] || '读取失败')
-          + '），仍按实时通知格式提交，未生效则退化为普通通知。'}</span>
-      <div style="display:flex;gap:9px;margin-top:10px">
+      <span style="opacity:.85">${liveMsg}</span>
+      <div style="display:flex;gap:7px;margin-top:10px">
         <button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>
+        <button class="btn ghost sm" style="flex:1" id="btnPromotedFix">实时活动</button>
         <button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>
       </div>
     </div>`;

@@ -692,15 +692,17 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | 用途 | API | 说明 |
 | --- | --- | --- |
 | **声明权限** | `<uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />` | **缺了它，系统设置里连「流体云显示实时活动」开关都不出现**（对照 InstallerX-Revived 的清单确认） |
-| 请求提升 | `FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)` | 平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装，内部就是设这个位；常量值由 `platform-36` 的 `javap -constants` 读出 |
-| 岛/芯片文案 | `Builder.setShortCriticalText(String)` | 直接放验证码 |
+| ~~请求提升~~ | ~~`FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)`~~ | ~~平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装，内部就是设这个位~~ → **错，见 12.2**：那个位是系统打的结果，应用设了会被清掉 |
+| **请求提升（正确做法）** | extras 写 `android.requestPromotedOngoing=true` | 等价于 AndroidX `NotificationCompat.Builder.setRequestPromotedOngoing(true)`；官方硬性条件，详见 12.2 |
+| 岛/芯片文案 | `Builder.setShortCriticalText(String)` | 直接放验证码（6 位，符合官方「≤7 字符」建议）；同时写 extras 兜底 |
 | 进度形态 | `ProgressStyle.setProgress(int)` + `setStyledByProgress(true)` | 不设 segments 时 max 默认 100，故直接传百分比 |
-| ~~颜色化~~ | ~~`setColorized(true)`~~ | **不能设**。官方文档明确「Must NOT setColorized to TRUE」；早期按 android16-release 某个分支的判定加了它，与现行文档和实机实现相反，已移除 |
+| ~~颜色化~~ | ~~`setColorized(true)`~~ | **不能设**。官方文档明确「Must NOT setColorized to TRUE」；AOSP 旧分支的判定确实要求它，那是 QPR1 之前的规则，详见 12.2 |
 
-**踩坑记录（两层）**：
+**踩坑记录（三层，一层比一层深）**：
 
-1. 最初把 `canPostPromotedNotifications()` 当功能开关。它在 AOSP 里只是读一个 per-package 偏好（默认 `true`），一旦反射取不到就把整条路挡死。现在它只用于向用户解释。
-2. 真正致命的是**漏声明 `POST_PROMOTED_NOTIFICATIONS`**。现象是：通知照常发，但系统设置里根本没有「实时活动」这一项，也无法被提升。对照能正常上岛的 InstallerX-Revived 才定位到。
+1. 最初把 `canPostPromotedNotifications()` 当功能开关。它实际查的是「用户有没有在设置里允许本应用发提升通知」（AOSP 内部调到 `canBePromoted(pkg, uid)`），一旦反射取不到就把整条路挡死。现在它不再参与任何功能判断。
+2. 第二层是**漏声明 `POST_PROMOTED_NOTIFICATIONS`**。现象是：通知照常发，但系统设置里根本没有「实时活动」这一项，也无法被提升。对照能正常上岛的 InstallerX-Revived 才定位到。
+3. 第三层才是「开关出现了、也报告允许了，却仍然只是传统通知」——**通知从来没有真正请求过提升**。完整排查见 12.2，修复落在 1.1.3.10。
 
 #### 其余实现要点
 
@@ -743,6 +745,49 @@ python tools/audit_apk.py <产物.apk>
 - 会话会过期，失效时会自动提示并弹出登录框；
 - 目前只在一所学校实测，其他学校的命名与扣费规则可能不同；
 - 显示用的日切点依赖水控器时钟正确，而水控器时钟无法从客户端测量（见 11.6）。
+
+### 12.2 流体云始终不出现：一次「把结果当请求」的误判（1.1.3.10）
+
+**现象**：1.1.3.9 装上后，系统设置里出现了「流体云显示实时活动」开关，首页也显示「系统报告支持实时通知」，但通知栏里仍是传统常驻通知，状态栏胶囊 / 流体云没有出现。
+
+**排查顺序**（每一步都找可复核的证据，不靠猜）：
+
+| 步骤 | 查了什么 | 结论 |
+| --- | --- | --- |
+| 1 | 拆 1.1.3.9 的清单与 dex | 权限已声明、`applyLiveUpdateFlavor` 确实进了 dex，不是「改了源码忘了同步」 |
+| 2 | AOSP `NotificationManagerService` 发通知处的判定 | 只有 `canBePromoted(pkg,uid)` 且 `hasPromotableCharacteristics()` 且通道 importance 大于 `IMPORTANCE_MIN` 时，系统才会给通知打 `FLAG_PROMOTED_ONGOING` |
+| 3 | 应用能不能自己设这个 flag | **不能**。`fixNotification` 里明确写着 `notification.flags &= ~FLAG_PROMOTED_ONGOING; // Apps cannot set this flag` |
+| 4 | 官方《创建实时更新通知》（Android 16 QPR1） | 必须用 `EXTRA_REQUEST_PROMOTED_ONGOING` 或 `NotificationCompat.Builder#setRequestPromotedOngoing` **请求**提升；且**不得** `setColorized(true)` |
+| 5 | 实机能上岛的参照实现：InstallerX-Revived `ModernNotificationBuilder.kt` | `.setRequestPromotedOngoing(true)` + `ProgressStyle`（带段）+ `setShortCriticalText`，既没设 colorized，也没手设 flag |
+
+**根因**：我们把「系统打的结果标记」当成了「应用发出的请求」。
+
+> ~~给通知设 `FLAG_PROMOTED_ONGOING` = 请求提升~~ → **错**。那个位是系统给合格通知打的**结果**，应用设了会被系统清掉。真正缺的是 `android.requestPromotedOngoing=true`；没有它，系统根本不认为这条通知请求过提升，于是永远走传统通知。
+>
+> ~~首页显示「系统报告支持实时通知」说明已经上岛~~ → **错**。`canPostPromotedNotifications()` 问的是「用户开关有没有允许本应用发提升通知」，既不代表系统支持，也不代表这条通知已被提升。前端已改为只报读回的真实结果。
+
+**一套判定，两个版本**（这个坑值得记牢）：
+
+- AOSP `android16-release` 与 `main` 分支里的 `hasPromotableCharacteristics()` 仍写着 `isColorizedRequested() && ...`，是 QPR1 **之前**的旧判定；
+- Android 16 QPR1 起改成 `EXTRA_REQUEST_PROMOTED_ONGOING`，并明确禁止 `setColorized(true)`。
+- 所以 1.1.3.8 按旧分支源码加 `setColorized(true)`、1.1.3.9 按官方文档删掉，两次都不算瞎改，但都没补上真正缺的那个 extra。以「官方文档 + 实机能上岛的实现」为准：**写 `android.requestPromotedOngoing=true`，不设 colorized**。
+
+**1.1.3.10 的改动**：
+
+1. `applyLiveUpdateFlavor()` 用 `b.getExtras().putBoolean("android.requestPromotedOngoing", true)` 请求提升（`Builder.build()` 会把 `getExtras()` 合并进 `Notification.extras`，已在 AOSP 源码确认）；平台若有 `setRequestPromotedOngoing(boolean)` 再反射调一次作双保险。`setShortCriticalText` 也改成方法 + extras 双写兜底。
+2. 手设 `FLAG_PROMOTED_ONGOING` 降级为「兼容少数直接读 flag 的 ROM」，注释写明它按规范会被清掉。
+3. `notifyStatus()` 增加 `diag`：读回自己那条通知的 `found / req / short / style / colorized / chars / flagged / flags / canPost`。前端据此分四种情况给文案，不再用探测结果冒充结论。
+4. 新增桥 `openPromotedSettings()`：优先 `android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS`（AOSP 常量名），退而求其次 `android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS`（文档写法），都不存在就回应用通知总设置页。
+5. 提示框补第 ⑤ 步「流体云显示实时活动」开关，并加「实时活动」直达按钮；诊断显示「通知合格但用户开关没开」时，即使点过「知道了」也会继续提示，避免又卡在没人提醒的地方。
+6. 版本号按约定留在 1.1.3.x：**1.1.3.10 / versionCode 21**，不发 1.1.4。
+
+**怎么验证这次是不是真成了**：装 1.1.3.10（签名指纹与线上一致，可直接覆盖安装）→ 有预约时下拉刷新一次让通知重发 → 看提示框里的「实时活动」一行：
+
+- 「已生效 ✓」= 系统确实给通知打了提升标记；
+- 「已满足系统条件但没被提升 / 开关没开」= 点「实时活动」打开开关，再刷新一次；
+- 「不满足条件」= 括号里会给出 `请求提升` 与 `样式` 的实际读回值，可直接据此定位，不用再来回猜。
+
+**构建附注**：本机 Git Bash 下 `build/build.sh` 原来把 `/c/...` 路径直接写进 javac / d8 的 `@argfile`。MSYS 会自动转换命令行参数，但不会转换列表文件内容，Windows 版 javac 会把它读成 `\c\...` 并报「找不到文件」。已改为用 `cygpath -m -f -` 逐行转换 `sources.txt` / `classes.txt`，并把 `-bootclasspath` / `-classpath` / `--lib` 一并转成 Windows 路径。
 
 ---
 

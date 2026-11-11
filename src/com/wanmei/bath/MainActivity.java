@@ -386,10 +386,16 @@ public class MainActivity extends android.app.Activity {
             return codeNotifyStatus();
         }
 
-        /** 跳到本应用的「验证码显示」类别设置页，让用户直接改静默/锁屏显示。 */
+        /** 跳到本应用的通知总设置页，让用户改允许通知 / 锁屏显示通知。 */
         @JavascriptInterface
         public void openNotifySettings() {
             gotoCodeNotifySettings();
+        }
+
+        /** 直达「实时活动 / 流体云显示实时活动」开关页；系统没有该页就退回通知总设置页。 */
+        @JavascriptInterface
+        public void openPromotedSettings() {
+            gotoPromotedSettings();
         }
 
         /** 用户点过「知道了」就不再提示锁屏设置。存原生，file:// 下 localStorage 不可靠。 */
@@ -415,10 +421,18 @@ public class MainActivity extends android.app.Activity {
     private static final int NID_CODE = 1001;
     private static final int REQ_NOTIFY = 1001;
 
-    /* android.app.Notification.FLAG_PROMOTED_ONGOING（API 36）。
-       本地只编译到 SDK 34 拿不到这个常量，写死数值并注明出处；
-       值取自 platform-36 的 android.jar，javap -constants 读出 = 262144 (0x40000)。
-       设错只会导致「没被提升」，不影响通知本身，属安全失败。 */
+    /* Android 16 QPR1 起，「请求提升」靠的是 extras 里的这个键，不是 flag。
+       AndroidX 的 NotificationCompat.Builder.setRequestPromotedOngoing(true)
+       内部就是往 extras 写它（源码注释说明字段名抄自 android.app.Notification）。
+       官方文档把它列为实时更新的硬性条件之一。 */
+    private static final String EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing";
+    private static final String EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText";
+
+    /* FLAG_PROMOTED_ONGOING（API 36）= 262144 (0x40000)，是【系统】给合格通知
+       打上的结果标记，应用不能自己设：AOSP NotificationManagerService 明确有
+       「notification.flags &= ~FLAG_PROMOTED_ONGOING; // Apps cannot set this flag」。
+       这里仍保留一次兼容写入（少数 ROM 可能直接读应用设的位），写错也无害。
+       真正决定是否提升的，是下面的 EXTRA_REQUEST_PROMOTED_ONGOING + 通知特征。 */
     private static final int FLAG_PROMOTED_ONGOING = 262144;
 
     /* 用户还没授权时先把要发的内容存着，授权回来再补发，
@@ -542,11 +556,15 @@ public class MainActivity extends android.app.Activity {
             o.put("channel", has);
             o.put("importance", imp);
             o.put("silent", silent);
-            // 本机是否开放了「可被提升」的接口；仅用于向用户解释，不参与功能开关
+            /* 注意语义：canPostPromotedNotifications() 问的是「用户有没有允许本应用发提升通知」，
+               不是「系统支不支持实时活动」，更不是「这条通知已经被提升」。
+               真实结果看 diag.flagged / diag.chars，前端已不再把这个值说成「支持」。 */
             String why = promotedSupport();
-            o.put("live", "yes".equals(why));
+            o.put("live", "yes".equals(why));   // 兼容旧字段名，含义=用户开关允许
+            o.put("promotedAllowed", "yes".equals(why));
             o.put("liveWhy", why);
             o.put("sdk", Build.VERSION.SDK_INT);
+            o.put("diag", promotedDiag());
             o.put("ok", enabled && has && !silent);
         } catch (Exception e) {
             try { o.put("ok", false); } catch (Exception ignored) { }
@@ -574,6 +592,30 @@ public class MainActivity extends android.app.Activity {
                 startActivity(i2);
             } catch (Exception ignored) { }
         }
+    }
+
+    /** 直达「实时活动」开关页。官方文档写的是 ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS，
+        AOSP 源码里实际常量叫 ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS
+        （值 android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS）。两个都试一遍：
+        不同 ROM 实现不一样，且本地只编译到 SDK 34 拿不到常量，只能用字符串。
+        都不存在就退回应用通知总设置页——用户仍可从那里找到「流体云显示实时活动」。 */
+    private void gotoPromotedSettings() {
+        String[] actions = {
+                "android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS",
+                "android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS"
+        };
+        for (String a : actions) {
+            try {
+                Intent i = new Intent(a);
+                i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (i.resolveActivity(getPackageManager()) != null) {
+                    startActivity(i);
+                    return;
+                }
+            } catch (Exception ignored) { }
+        }
+        gotoCodeNotifySettings();
     }
 
     /* ---------- Android 16 原生实时通知（Live Updates）----------
@@ -606,10 +648,8 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
-    /** 请求提升（等价于 AndroidX 的 setRequestPromotedOngoing(true)）。
-        平台侧没有 setRequestPromotedOngoing，那是 AndroidX 的兼容封装，
-        它内部就是设 FLAG_PROMOTED_ONGOING 这个位——所以这里直接设位。
-        FLAG_PROMOTED_ONGOING = 0x00040000（platform-36 javap -constants 读出）。 */
+    /** 兼容写入：绝大多数 ROM 会按规范清掉应用自带的这个位，属于「无害但别指望」。
+        【不要】把它当成请求提升的手段，见 applyLiveUpdateFlavor。 */
     private void requestPromoted(android.app.Notification.Builder b) {
         try {
             b.getClass().getMethod("setFlag", int.class, boolean.class)
@@ -618,29 +658,48 @@ public class MainActivity extends android.app.Activity {
     }
 
     /** 给通知补上「可被提升」所需的特征。
-        依据官方 Live Updates 文档 + InstallerX-Revived 的实测实现：
+        依据官方《创建实时更新通知》(Android 16 QPR1) + 能实际上岛的
+        InstallerX-Revived / ModernNotificationBuilder.kt：
           必须声明 POST_PROMOTED_NOTIFICATIONS（清单里已加）
+          必须【请求提升】：extras 里写 android.requestPromotedOngoing=true  ← 本次修复的核心
           必须 ongoing、有 contentTitle、无自定义视图、非分组摘要
-          必须请求提升（FLAG_PROMOTED_ONGOING）
           样式须为 Standard / BigText / Call / Progress / Metric
-          【不能】setColorized(true)——早期版本我按旧版 AOSP 分支的判定加了它，
-          但那版要求「请求颜色化」，与现行文档和实机实现都相反，已移除。
+          通道 importance 不能是 IMPORTANCE_MIN（这里是 DEFAULT）
+          【不能】setColorized(true)——官方硬性要求，AOSP 旧分支那套
+          「isColorizedRequested 才算可提升」的判定已经不适用于 QPR1。
         @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码 */
     private void applyLiveUpdateFlavor(android.app.Notification.Builder b,
                                        String shortText, String room, long leftMs) {
-        requestPromoted(b);
+        /* 关键：请求提升。AndroidX 的 setRequestPromotedOngoing(true) 就是
+           b.getExtras().putBoolean("android.requestPromotedOngoing", true)，
+           没有别的动作。之前设 FLAG_PROMOTED_ONGOING 是错的：那个位是系统
+           给通知打的「结果」，应用设了会被系统清掉，等于从来没请求过。 */
+        b.getExtras().putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true);
+        // 若平台自身提供了这个方法，也调一次（幂等）；没有就只靠 extras
+        try {
+            b.getClass().getMethod("setRequestPromotedOngoing", boolean.class)
+                    .invoke(b, true);
+        } catch (Throwable ignored) { }
+        requestPromoted(b);   // 兼容少数直接读 flag 的 ROM
+
+        /* 芯片上的极短文案（官方建议 ≤7 字符），反射 + extras 双写兜底 */
         try {
             b.getClass().getMethod("setShortCriticalText", String.class)
                     .invoke(b, shortText);
         } catch (Throwable ignored) { }
+        b.getExtras().putString(EXTRA_SHORT_CRITICAL_TEXT, shortText);
 
         /* 样式：优先 ProgressStyle（带进度条，观感最接近岛），
            取不到就用 BigTextStyle —— 两者都在可提升样式白名单内。
-           ProgressStyle 不设 segments 时 max 默认 100，所以进度直接给百分比。 */
+           给一个长度为 100 的段：不设段时 max 虽默认 100，但 styledByProgress
+           需要有段可着色，否则可能渲染不出提升卡片（对照 InstallerX 的做法）。 */
         boolean styled = false;
         try {
             Class<?> psCls = Class.forName("android.app.Notification$ProgressStyle");
             Object ps = psCls.getConstructor().newInstance();
+            Class<?> segCls = Class.forName("android.app.Notification$ProgressStyle$Segment");
+            Object seg = segCls.getConstructor(int.class).newInstance(100);
+            psCls.getMethod("addProgressSegment", segCls).invoke(ps, seg);
             int pct = (int) Math.max(0, Math.min(100, leftMs * 100L / 86400000L));
             psCls.getMethod("setProgress", int.class).invoke(ps, pct);
             psCls.getMethod("setStyledByProgress", boolean.class).invoke(ps, true);
@@ -651,6 +710,66 @@ public class MainActivity extends android.app.Activity {
             b.setStyle(new android.app.Notification.BigTextStyle()
                     .bigText(room + "\n当日有效，到浴室设备输入即可开阀。"));
         }
+    }
+
+    /** 读回自己那条通知，看系统最终有没有把它提升，以及为什么没提升。
+        canPostPromotedNotifications() 只能说明「用户开关是否允许」，
+        hasPromotableCharacteristics() 只能说明「通知本身是否合格」，
+        只有 FLAG_PROMOTED_ONGOING 是系统真正提升后的结果标记。
+        全部随 notifyStatus 一起给前端显示，不再靠探测结果猜。 */
+    private JSONObject promotedDiag() {
+        JSONObject o = new JSONObject();
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            boolean found = false, flagged = false, chars = false;
+            int flags = 0;
+            String req = "", shortText = "", style = "";
+            boolean colorized = false;
+            if (nm != null) {
+                android.service.notification.StatusBarNotification[] act =
+                        nm.getActiveNotifications();
+                if (act != null) {
+                    for (android.service.notification.StatusBarNotification s : act) {
+                        if (s == null || s.getId() != NID_CODE) continue;
+                        android.app.Notification n = s.getNotification();
+                        if (n == null) continue;
+                        found = true;
+                        flags = n.flags;
+                        flagged = (flags & FLAG_PROMOTED_ONGOING) != 0;
+                        if (n.extras != null) {
+                            req = n.extras.getBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, false)
+                                    ? "yes" : "no";
+                            shortText = n.extras.getString(EXTRA_SHORT_CRITICAL_TEXT, "");
+                            colorized = n.extras.getBoolean("android.colorized", false);
+                        }
+                        try {
+                            Object r = android.app.Notification.class
+                                    .getMethod("hasPromotableCharacteristics").invoke(n);
+                            chars = (r instanceof Boolean) && ((Boolean) r);
+                        } catch (Throwable ignored) { }
+                        try {
+                            Object r = android.app.Notification.class
+                                    .getMethod("getNotificationStyle").invoke(n);
+                            if (r instanceof Class) style = ((Class<?>) r).getSimpleName();
+                        } catch (Throwable ignored) { }
+                        break;
+                    }
+                }
+            }
+            o.put("found", found);            // 通知是否还在通知栏
+            o.put("req", req);                // 有没有按官方要求「请求提升」
+            o.put("short", shortText);        // 芯片文案
+            o.put("style", style);            // 实际使用的样式
+            o.put("colorized", colorized);    // 应为 false（官方禁止 true）
+            o.put("chars", chars);            // 系统认为「具备可提升特征」
+            o.put("flagged", flagged);        // 系统已打上 FLAG_PROMOTED_ONGOING
+            o.put("flags", flags);
+            o.put("canPost", promotedSupport());  // 用户开关：yes/no/no_api/...
+        } catch (Throwable t) {
+            try { o.put("err", t.getClass().getSimpleName()); } catch (Exception ignored) { }
+        }
+        return o;
     }
 
     private android.app.PendingIntent pendingOpenApp() {
