@@ -899,7 +899,7 @@ function notifySetupHint() {
       state = '实时活动：通知已满足提升条件，还没被系统提升。'
         + (d.canPost === 'no'
             ? '开关还没开，打开后再下拉刷新一次。'
-            : '如果流体云还没出现，把开关打开后再下拉刷新一次即可。');
+            : '如果“灵动岛”还没出现，把开关打开后再下拉刷新一次即可。');
     } else {
       state = '实时活动：通知暂不满足提升条件（请求提升=' + (d.req || '?')
         + '，样式=' + (d.style || '?') + '），会先退化成普通通知。';
@@ -911,10 +911,10 @@ function notifySetupHint() {
         + ' · 样式' + (d.style || '?') + '</span><br>'
       : '';
     return openBox
-      + '<strong>打开「流体云显示实时活动」开关</strong><br>'
-      + '实时活动会以流体云显示，<strong>不受锁屏通知等细项设置的影响</strong>，开这一个开关就够了。<br>'
-      + '在「应用通知」页「允许通知」下方找到 <strong>流体云显示实时活动</strong>'
-      + '（澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。<br>'
+      + '<strong>打开「实时活动」开关</strong><br>'
+      + '验证码会以“灵动岛”形式显示，<strong>不受锁屏通知等细项设置的影响</strong>，开这一个开关就够了。<br>'
+      + '在「应用通知」页「允许通知」下方找到它（ColorOS 叫 <strong>流体云显示实时活动</strong>，'
+      + '澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。<br>'
       + '<span style="opacity:.9">验证码会<strong>明文</strong>显示在锁屏上。'
       + '不想显示，关掉「允许通知」或「实时活动」开关即可。</span><br>'
       + '<span style="opacity:.85">' + state + '</span><br>'
@@ -1190,7 +1190,7 @@ function renderNotifyState() {
     info.textContent = '应用通知已关闭，锁屏不会显示；点这里可改回来。';
   } else if (d && d.flagged) {
     val.textContent = '已生效';
-    info.textContent = '验证码正以流体云显示在锁屏 / 状态栏。';
+    info.textContent = '验证码正以“灵动岛”显示在锁屏 / 状态栏。';
   } else {
     val.textContent = '未开启';
     info.textContent = '如需在锁屏显示，点这里打开「允许通知」与实时活动开关。';
