@@ -458,6 +458,8 @@ public class MainActivity extends android.app.Activity {
             o.put("orders", b.getJSONArray("orders"));
             o.put("bathrooms", b.getJSONArray("list"));
             o.put("serverTime", b.optString("serverTime", ""));
+            // 诊断：服务端 Date 头 vs 本机时间（只在 debug 版前端显示）
+            o.put("diag", diagJson(api));
             o.put("limits", lim);
             o.put("settings", lim);
             return o;
@@ -585,6 +587,29 @@ public class MainActivity extends android.app.Activity {
         }
 
         throw new Api.Fail("未知接口: " + path);
+    }
+
+    /** 诊断信息：Date 头原文、解析结果、本机时刻、两者差值。
+        只用于 debug 版排查「服务器时钟到底偏多少、偏在哪一层」。 */
+    private static JSONObject diagJson(Api api) {
+        JSONObject d = new JSONObject();
+        try {
+            String raw = api.diagDateHeader();
+            long srvMs = Api.parseHttpDate(raw);
+            long localMs = api.diagDateLocalMs();
+            d.put("dateHeader", raw == null ? "" : raw);
+            d.put("dateFrom", api.diagDateFrom());
+            d.put("serverMs", srvMs);
+            d.put("localMs", localMs);
+            d.put("skewMs", srvMs > 0 ? (srvMs - localMs) : 0);
+            SimpleDateFormat f = new SimpleDateFormat("HH:mm:ss", Locale.CHINA);
+            d.put("serverClock", srvMs > 0 ? f.format(new Date(srvMs)) : "");
+            d.put("localClock", localMs > 0 ? f.format(new Date(localMs)) : "");
+            d.put("nowClock", f.format(new Date()));
+        } catch (Exception e) {
+            d.put("error", String.valueOf(e.getMessage()));
+        }
+        return d;
     }
 
     /** 用服务端下发的 HHMMSS 生成本次预约时间（秒置 0，避开本地时钟偏差） */

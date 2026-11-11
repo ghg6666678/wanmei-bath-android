@@ -14,11 +14,13 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
@@ -79,6 +81,53 @@ public class Api {
     private JSONArray lastRooms = new JSONArray();
     private JSONArray lastOrders = new JSONArray();
     private JSONObject cachedLimit;
+
+    /* 诊断用：最近一次响应的 Date 头原文、收到它时的本机毫秒、来自哪个请求。
+       Date 是 HTTP 强制响应头，每个响应都有，是唯一无需额外接口就能拿到的
+       「服务器自己的时间」。先只观测，不参与任何计算。 */
+    private String lastDateHeader = "";
+    private long lastDateLocalMs = 0L;
+    private String lastDateFrom = "";
+
+    public String diagDateHeader() { return lastDateHeader; }
+    public long diagDateLocalMs() { return lastDateLocalMs; }
+    public String diagDateFrom() { return lastDateFrom; }
+
+    /** 把 RFC 1123 的 Date 头解析成毫秒（UTC）；解析不出来返回 0。
+        形如 "Sat, 08 Nov 2026 16:47:32 GMT"。手写解析而不用 SimpleDateFormat：
+        后者依赖 JVM/ICU 的时区与本地化数据，个别精简 ROM 上 "zzz"/"EEE"
+        会解析失败，而这个格式是固定的，自己拆更可靠。 */
+    public static long parseHttpDate(String s) {
+        if (s == null) return 0L;
+        s = s.trim();
+        int comma = s.indexOf(',');
+        if (comma > 0) s = s.substring(comma + 1).trim();
+        String[] p = s.split("\\s+");
+        if (p.length < 4) return 0L;
+        try {
+            int day = Integer.parseInt(p[0]);
+            int mon = monthIdx(p[1]);
+            int year = Integer.parseInt(p[2]);
+            String[] hms = p[3].split(":");
+            if (mon < 0 || hms.length < 3) return 0L;
+            Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+            c.clear();
+            c.set(year, mon, day,
+                  Integer.parseInt(hms[0]), Integer.parseInt(hms[1]), Integer.parseInt(hms[2]));
+            return c.getTimeInMillis();
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private static int monthIdx(String m) {
+        String[] names = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+        for (int i = 0; i < names.length; i++) {
+            if (names[i].equalsIgnoreCase(m)) return i;
+        }
+        return -1;
+    }
 
     public static class Expired extends Exception {
         public Expired(String m) { super(m); }
@@ -184,6 +233,14 @@ public class Api {
                     if (eq > 0) cookies.put(kv.substring(0, eq).trim(), kv.substring(eq + 1).trim());
                 }
             }
+        }
+
+        // 诊断用：记录最近一次响应的服务端 Date 头与本机时刻（毫秒）
+        String dh = r.header("Date");
+        if (dh != null && !dh.isEmpty()) {
+            lastDateHeader = dh;
+            lastDateLocalMs = System.currentTimeMillis();
+            lastDateFrom = path;
         }
 
         InputStream is = (r.code >= 400) ? c.getErrorStream() : c.getInputStream();

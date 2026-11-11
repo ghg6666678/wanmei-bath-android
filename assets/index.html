@@ -374,6 +374,16 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <button class="starpick" id="btnStarDorm">☆ 星标楼栋</button>
     <span style="font-size:11.5px;color:var(--ink3);margin-left:auto" id="srvTime"></span>
   </div>
+  <!-- DEBUG：服务端时钟诊断（正式版删除） -->
+  <section class="card hidden" id="dbgCard"
+           style="font-size:11.5px;line-height:1.9;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <b style="font-size:12px">时钟诊断（仅测试版）</b>
+      <button id="dbgReload" class="btn ghost" style="margin-left:auto;padding:2px 8px;font-size:11px">重新探测</button>
+    </div>
+    <div id="dbgBody">等待数据…</div>
+  </section>
+
   <section class="card" id="roomList"><div class="empty">加载中…</div></section>
 
   <!-- 记录 -->
@@ -985,6 +995,10 @@ $('#btnStarDorm').onclick = () => {
     }, 2);
 };
 
+/* DEBUG：重新探测一次（会重新走 /api/state，顺带刷新 Date 头） */
+const __dbgBtn = $('#dbgReload');
+if (__dbgBtn) __dbgBtn.onclick = () => { loadAll(); };
+
 function renderMe() {
   const pe = $('#mePhone');
   if (pe) pe.textContent = state.cfg.phone || '—';
@@ -1003,6 +1017,52 @@ function renderMe() {
     (upd && upd.version && verCmp(upd.version, ver) > 0 ? ' · 有新版本 ' + upd.version : '');
 }
 
+/* DEBUG：把服务端 Date 头与本机时间并排显示，判断时差出在哪一层。
+   只观测，不参与任何计算。正式版应连同 #dbgCard 一起删除。 */
+function renderDiag(d) {
+  const card = $('#dbgCard');
+  if (!card) return;
+  if (!d) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  const body = $('#dbgBody');
+  if (d.error) { body.textContent = '探测失败：' + d.error; return; }
+
+  const skew = Number(d.skewMs || 0);
+  const absMin = Math.abs(skew) / 60000;
+  let verdict;
+  if (!d.dateHeader) {
+    verdict = '❌ 没有拿到 Date 头 —— 这个方向不可用';
+  } else if (!d.serverMs) {
+    verdict = '⚠️ Date 头解析失败，原文见下';
+  } else if (absMin < 1) {
+    verdict = '✅ 服务器与本机基本一致（< 1 分钟）';
+  } else {
+    const dir = skew < 0 ? '慢' : '快';
+    verdict = (skew < 0 ? '⏪ ' : '⏩ ') + '服务器' + dir + '本机 ' +
+              absMin.toFixed(1) + ' 分钟';
+  }
+
+  const rows = [
+    ['判定', verdict],
+    ['Date 头', d.dateHeader || '(空)'],
+    ['来自请求', d.dateFrom || '(未知)'],
+    ['服务器时钟', (d.serverClock || '—') + (d.serverMs ? '' : ' (未解析出)')],
+    ['本机时钟', d.localClock || '—'],
+    ['当前时刻', d.nowClock || '—'],
+    ['差值(ms)', (skew > 0 ? '+' : '') + skew],
+    ['serverTime', state.serverTimeRaw ? state.serverTimeRaw : '(空)'],
+  ];
+  body.innerHTML = rows.map(([k, v]) =>
+    `<div style="display:flex;gap:8px"><span style="color:var(--ink3);flex:0 0 5.5em">${k}</span>` +
+    `<span style="flex:1">${escapeHtml(String(v))}</span></div>`).join('');
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
+                                      '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+
 async function loadAll() {
   try {
     const j = await api('/api/state');
@@ -1011,6 +1071,7 @@ async function loadAll() {
     state.orders = j.orders || [];
     state.rooms = j.bathrooms || [];
     state.settings = j.settings || j.limits || {};
+    state.serverTimeRaw = j.serverTime || '';
     // 用服务端 nowdate(HHMMSS) 校准
     if (j.serverTime && j.serverTime.length >= 6) {
       const now = new Date();
@@ -1030,6 +1091,7 @@ async function loadAll() {
       state.serverCalibrated = false;
       $('#srvTime').textContent = '服务器时间未知 · 按本机时间估算';
     }
+    renderDiag(j.diag);
     $('#hName').textContent = state.cfg.name ? state.cfg.name + ' · 洗澡' : '洗澡';
     $('#hSub').textContent = state.cfg.school || '';
     renderBalance(); renderOrder(); renderRooms(); renderMe();
