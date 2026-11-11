@@ -347,10 +347,11 @@ public class Api {
         JSONObject d = invoke("zfbgetbathroomlist", extra, true);
         JSONObject data = d.optJSONObject("data");
         JSONObject out = new JSONObject();
+        String nowdate = pickNowdate(d, data);
         if (data == null) {
             out.put("orders", new JSONArray());
             out.put("list", new JSONArray());
-            out.put("serverTime", "");
+            out.put("serverTime", nowdate);
             return out;
         }
         JSONArray orders = data.optJSONArray("orderbathroomlist");
@@ -360,10 +361,39 @@ public class Api {
         out.put("orders", orders);
         out.put("list", list);
         out.put("oddfare", data.opt("oddfare"));
-        out.put("serverTime", data.optString("nowdate", ""));
+        out.put("serverTime", nowdate);
         lastRooms = list;
         lastOrders = orders;
         return out;
+    }
+
+    /* 服务端当前时间 nowdate(HHMMSS)。
+       实测它不一定挂在 data 顶层：本校区这台服务器把 nowdate 放在订单对象里，
+       data 顶层为空。取不到时前端 state.serverOffset 恒为 0，失效倒计时就
+       退回用【本机时间】算 —— 服务器慢 15 分钟时显示会多出 15 分钟，用户
+       以为码还能用到 24:00，实际早已作废。
+
+       所以按 data 顶层 → data 里的订单 → 响应顶层 的顺序找，都找不到再返回
+       空串，让前端保持「未校准」而不是拿一个错值。 */
+    private static String pickNowdate(JSONObject top, JSONObject data) {
+        String v = data == null ? "" : data.optString("nowdate", "");
+        if (v.length() >= 6) return v;
+        if (data != null) {
+            JSONArray orders = data.optJSONArray("orderbathroomlist");
+            if (orders != null) {
+                for (int i = 0; i < orders.length(); i++) {
+                    JSONObject o = orders.optJSONObject(i);
+                    if (o == null) continue;
+                    String x = o.optString("nowdate", "");
+                    if (x.length() >= 6) return x;
+                }
+            }
+        }
+        if (top != null) {
+            String t = top.optString("nowdate", "");
+            if (t.length() >= 6) return t;
+        }
+        return "";
     }
 
     public synchronized double balance() throws Exception {
