@@ -458,8 +458,13 @@ public class MainActivity extends android.app.Activity {
             o.put("orders", b.getJSONArray("orders"));
             o.put("bathrooms", b.getJSONArray("list"));
             o.put("serverTime", b.optString("serverTime", ""));
-            // 诊断：服务端 Date 头 vs 本机时间（只在 debug 版前端显示）
-            o.put("diag", diagJson(api));
+            // 服务器时钟：来自最近一次响应的 Date 头（HTTP 强制头，无需额外接口）
+            JSONObject sc = new JSONObject();
+            sc.put("has", api.hasServerClock());
+            sc.put("nowMs", api.serverNowMs());
+            sc.put("skewMs", api.serverSkewMs());
+            sc.put("from", api.serverClockFrom());
+            o.put("srvClock", sc);
             o.put("limits", lim);
             o.put("settings", lim);
             return o;
@@ -532,7 +537,7 @@ public class MainActivity extends android.app.Activity {
             if (code.isEmpty()) throw new Api.Fail("缺少浴室编号");
 
             JSONObject b = api.bathrooms();
-            if (dt.isEmpty()) dt = nowFromServer(b.optString("serverTime", ""));
+            if (dt.isEmpty()) dt = nowFromServer(b.optString("serverTime", ""), api);
 
             JSONArray rooms = b.getJSONArray("list");
             JSONObject room = null;
@@ -589,32 +594,13 @@ public class MainActivity extends android.app.Activity {
         throw new Api.Fail("未知接口: " + path);
     }
 
-    /** 诊断信息：Date 头原文、解析结果、本机时刻、两者差值。
-        只用于 debug 版排查「服务器时钟到底偏多少、偏在哪一层」。 */
-    private static JSONObject diagJson(Api api) {
-        JSONObject d = new JSONObject();
-        try {
-            String raw = api.diagDateHeader();
-            long srvMs = Api.parseHttpDate(raw);
-            long localMs = api.diagDateLocalMs();
-            d.put("dateHeader", raw == null ? "" : raw);
-            d.put("dateFrom", api.diagDateFrom());
-            d.put("serverMs", srvMs);
-            d.put("localMs", localMs);
-            d.put("skewMs", srvMs > 0 ? (srvMs - localMs) : 0);
-            SimpleDateFormat f = new SimpleDateFormat("HH:mm:ss", Locale.CHINA);
-            d.put("serverClock", srvMs > 0 ? f.format(new Date(srvMs)) : "");
-            d.put("localClock", localMs > 0 ? f.format(new Date(localMs)) : "");
-            d.put("nowClock", f.format(new Date()));
-        } catch (Exception e) {
-            d.put("error", String.valueOf(e.getMessage()));
-        }
-        return d;
-    }
-
-    /** 用服务端下发的 HHMMSS 生成本次预约时间（秒置 0，避开本地时钟偏差） */
-    private static String nowFromServer(String hhmmss) {
+    /** 用服务端下发的 HHMMSS 生成本次预约时间（秒置 0，避开本地时钟偏差）。
+        服务端没下发 nowdate 时，退回到 Date 头测到的服务器时刻；
+        两者都没有才用本机时钟。 */
+    private static String nowFromServer(String hhmmss, Api api) {
         Date now = new Date();
+        long srvMs = api == null ? 0L : api.serverNowMs();
+        if (srvMs > 0) now = new Date(srvMs);
         String ymd = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(now);
         String hh, mm;
         if (hhmmss != null && hhmmss.length() >= 6) {

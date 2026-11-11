@@ -374,15 +374,6 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <button class="starpick" id="btnStarDorm">☆ 星标楼栋</button>
     <span style="font-size:11.5px;color:var(--ink3);margin-left:auto" id="srvTime"></span>
   </div>
-  <!-- DEBUG：服务端时钟诊断（正式版删除） -->
-  <section class="card hidden" id="dbgCard"
-           style="font-size:11.5px;line-height:1.9;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <b style="font-size:12px">时钟诊断（仅测试版）</b>
-      <button id="dbgReload" class="btn ghost" style="margin-left:auto;padding:2px 8px;font-size:11px">重新探测</button>
-    </div>
-    <div id="dbgBody">等待数据…</div>
-  </section>
 
   <section class="card" id="roomList"><div class="empty">加载中…</div></section>
 
@@ -655,6 +646,11 @@ window.__apiDone = function (id, json) {
 function __native() { return (typeof Android !== 'undefined') ? Android : null; }
 
 /* 统一走原生桥：原生在网络线程执行，完成后再回调，不卡界面 */
+
+/* WebView 内（没有原生桥，例如浏览器里调试）从响应头 Date 记下的服务器时刻。
+   App 内由 Java 侧解析同一个头，走 /api/state 的 srvClock 字段。 */
+let __srvClockMs = 0, __srvClockLocalMs = 0;
+
 function api(path, opt) {
   const o = opt || {};
   const method = (o.method || 'GET').toUpperCase();
@@ -662,9 +658,22 @@ function api(path, opt) {
   const nat = __native();
   if (!nat) {
     return fetch(path, Object.assign({headers: {'Content-Type': 'application/json'}}, o))
-      .then(r => r.json())
+      .then(r => {
+        /* 顺手记下 Date 头（HTTP 强制头）：浏览器里读得到，用它兜底校准 */
+        try {
+          const dh = r.headers.get('Date');
+          if (dh) {
+            const ms = Date.parse(dh);
+            if (ms > 0) { __srvClockMs = ms; __srvClockLocalMs = Date.now(); }
+          }
+        } catch (e) { }
+        return r.json();
+      })
       .then(j => { if (!j.ok && j.error) throw new Error(j.error); return j; })
-      .catch(() => { throw new Error('返回解析失败'); });
+      .catch(e => {
+        if (e && e.message && /返回解析失败/.test(e.message)) throw e;
+        throw new Error(e && e.message ? e.message : '返回解析失败');
+      });
   }
   return new Promise((resolve, reject) => {
     const id = 'r' + (++__seq);
@@ -995,10 +1004,6 @@ $('#btnStarDorm').onclick = () => {
     }, 2);
 };
 
-/* DEBUG：重新探测一次（会重新走 /api/state，顺带刷新 Date 头） */
-const __dbgBtn = $('#dbgReload');
-if (__dbgBtn) __dbgBtn.onclick = () => { loadAll(); };
-
 function renderMe() {
   const pe = $('#mePhone');
   if (pe) pe.textContent = state.cfg.phone || '—';
@@ -1017,46 +1022,6 @@ function renderMe() {
     (upd && upd.version && verCmp(upd.version, ver) > 0 ? ' · 有新版本 ' + upd.version : '');
 }
 
-/* DEBUG：把服务端 Date 头与本机时间并排显示，判断时差出在哪一层。
-   只观测，不参与任何计算。正式版应连同 #dbgCard 一起删除。 */
-function renderDiag(d) {
-  const card = $('#dbgCard');
-  if (!card) return;
-  if (!d) { card.classList.add('hidden'); return; }
-  card.classList.remove('hidden');
-  const body = $('#dbgBody');
-  if (d.error) { body.textContent = '探测失败：' + d.error; return; }
-
-  const skew = Number(d.skewMs || 0);
-  const absMin = Math.abs(skew) / 60000;
-  let verdict;
-  if (!d.dateHeader) {
-    verdict = '❌ 没有拿到 Date 头 —— 这个方向不可用';
-  } else if (!d.serverMs) {
-    verdict = '⚠️ Date 头解析失败，原文见下';
-  } else if (absMin < 1) {
-    verdict = '✅ 服务器与本机基本一致（< 1 分钟）';
-  } else {
-    const dir = skew < 0 ? '慢' : '快';
-    verdict = (skew < 0 ? '⏪ ' : '⏩ ') + '服务器' + dir + '本机 ' +
-              absMin.toFixed(1) + ' 分钟';
-  }
-
-  const rows = [
-    ['判定', verdict],
-    ['Date 头', d.dateHeader || '(空)'],
-    ['来自请求', d.dateFrom || '(未知)'],
-    ['服务器时钟', (d.serverClock || '—') + (d.serverMs ? '' : ' (未解析出)')],
-    ['本机时钟', d.localClock || '—'],
-    ['当前时刻', d.nowClock || '—'],
-    ['差值(ms)', (skew > 0 ? '+' : '') + skew],
-    ['serverTime', state.serverTimeRaw ? state.serverTimeRaw : '(空)'],
-  ];
-  body.innerHTML = rows.map(([k, v]) =>
-    `<div style="display:flex;gap:8px"><span style="color:var(--ink3);flex:0 0 5.5em">${k}</span>` +
-    `<span style="flex:1">${escapeHtml(String(v))}</span></div>`).join('');
-}
-
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
                                       '"': '&quot;', "'": '&#39;'}[c]));
@@ -1071,9 +1036,33 @@ async function loadAll() {
     state.orders = j.orders || [];
     state.rooms = j.bathrooms || [];
     state.settings = j.settings || j.limits || {};
-    state.serverTimeRaw = j.serverTime || '';
-    // 用服务端 nowdate(HHMMSS) 校准
-    if (j.serverTime && j.serverTime.length >= 6) {
+    /* 校准优先级：
+       1) srvClock —— 原生侧从最近一次响应的 Date 头解析出的服务器时刻。
+          这是 HTTP 强制响应头，每个请求都带，不依赖官方给什么字段，
+          而且随刷新持续更新（登录态、刷新、下单都会顺带刷新它）。
+       2) serverTime —— 官方下发的 nowdate(HHMMSS) 业务时间。
+          实测多数学校根本没下发，恒为空，所以只能当备选。
+
+       实测本校区服务器与手机相差不到 1 秒，所以整套校准的意义不在
+       修正一个巨大的偏差，而在于：手机时钟被手动改过时，失效倒计时
+       不会跟着一起错。 */
+    const sc = j.srvClock || null;
+    let srvNowMs = 0;
+    if (sc && sc.has && Number(sc.nowMs) > 0) {
+      srvNowMs = Number(sc.nowMs);
+    } else if (__srvClockMs > 0 && __srvClockLocalMs > 0) {
+      /* WebView/浏览器兜底：自己从 Date 头记下来的 */
+      const el = Date.now() - __srvClockLocalMs;
+      if (el >= 0 && el < 86400000) srvNowMs = __srvClockMs + el;
+    }
+    if (srvNowMs > 0) {
+      state.serverOffset = srvNowMs - Date.now();
+      state.serverCalibrated = true;
+      const srv = new Date(Date.now() + state.serverOffset);
+      // 差值太小就不提「已校准」了，免得界面上多一句用户不关心的噪音
+      const big = Math.abs(state.serverOffset) > 60000;
+      $('#srvTime').textContent = '服务器 ' + fmtClock(srv) + (big ? ' · 已自动校准' : '');
+    } else if (j.serverTime && j.serverTime.length >= 6) {
       const now = new Date();
       const srv = new Date(now);
       srv.setHours(+j.serverTime.slice(0, 2), +j.serverTime.slice(2, 4), +j.serverTime.slice(4, 6), 0);
@@ -1084,14 +1073,11 @@ async function loadAll() {
       const big = Math.abs(off) > 60000;
       $('#srvTime').textContent = '服务器 ' + fmtClock(srv) + (big ? ' · 已自动校准' : '');
     } else {
-      /* 拿不到服务端时间：不能假装和服务器对齐。serverOffset 保持 0，
-         失效倒计时会退回用本机时间算，各校时差不同，这个值可能偏
-         （本校区服务器慢 15 分钟，就会把失效时间显示晚 15 分钟）。
-         所以把状态说清楚，别让用户以为那就是服务端的判定。 */
+      /* 两条路都没走通（例如离线、或 WebView 里跑没有原生桥）：
+         serverOffset 保持 0，倒计时退回用本机时间算，界面如实说明。 */
       state.serverCalibrated = false;
       $('#srvTime').textContent = '服务器时间未知 · 按本机时间估算';
     }
-    renderDiag(j.diag);
     $('#hName').textContent = state.cfg.name ? state.cfg.name + ' · 洗澡' : '洗澡';
     $('#hSub').textContent = state.cfg.school || '';
     renderBalance(); renderOrder(); renderRooms(); renderMe();
@@ -1695,6 +1681,20 @@ let __loginPending = false;
 
 function showSheet(sel, locked) {
   const m = $('#mask'), sh = $(sel);
+  /* 已经在显示同一个弹层：不要重置动画，否则会再滑一次。
+     这条路径以前会出现在 login → guide 的原地切换上，
+     表现就是「弹了两次」。 */
+  if (sh.classList.contains('on') && m.classList.contains('on')) {
+    __sheetLocked = !!locked;
+    sh.classList.toggle('locked', __sheetLocked);
+    document.body.style.overflow = 'hidden';
+    return;
+  }
+  /* 换到另一个弹层：先把旧的摘掉（不关遮罩），避免两个同时带 .on
+     导致前一个的滑出动画和新一个的滑入叠在一起 */
+  document.querySelectorAll('.sheet.on').forEach(s => {
+    if (s !== sh) s.classList.remove('on');
+  });
   sh.style.removeProperty('--drag');
   sh.style.transition = '';
   m.style.removeProperty('opacity');
@@ -1939,16 +1939,20 @@ $('#lgSubmit').onclick = async () => {
   $('#lgWarn').style.display = 'none';
   try {
     await nativeCall('doLogin', phone, code);
-    hideSheet();
     $('#lgCode').value = '';
     await loadAll();
     /* state.cfg 是 loadAll 里刷新的，所以要在它之后判断：
        登录成功了，但官方那边这个号还没绑校园卡 → 给出绑定指引，
-       否则用户会看到「登录成功」然后一头雾水地进不去。 */
+       否则用户会看到「登录成功」然后一头雾水地进不去。
+
+       注意这里【先不要】hideSheet()：原来是「关掉登录框 → 等 700ms →
+       再弹引导」，中间那 700ms 背景完全裸露，看起来就是弹了两次
+       （一次关、一次开）。现在登录框原地换成引导框，遮罩一直不断。 */
     if ((state.cfg || {}).needCard) {
       toast('登录成功，但账号还没绑校园卡');
-      setTimeout(openGuide, 700);
+      openGuide();
     } else {
+      hideSheet(true);
       toast('登录成功');
     }
   } catch (e) {
@@ -2434,9 +2438,19 @@ window.__onShow = function () {
 };
 
 /* 首次启动：弹一次引导，说明校园卡怎么绑（不需要装官方 App 的那条路径）。
-   标记存原生；浏览器端 localStorage 可能不可用，失败就当没标记过，下次还会弹。 */
+   标记存原生；浏览器端 localStorage 可能不可用，失败就当没标记过，下次还会弹。
+
+   时钟要对齐：loadAll() 在脚本末尾立即执行，未登录时它在 400ms 后会自动弹
+   登录框。原来这里定在 500ms，于是登录框先出现、引导层再滑上来把它压住，
+   看起来就是「弹了两次」——其实是两个不同的弹层，共用同一个遮罩，
+   后者的滑入动画把前者的位置重算了一遍。
+
+   所以这里改成不等待（0ms）：先把引导立起来，400ms 的登录框就会看到
+   __sheetLocked 为真而自动排队（__loginPending），等引导关掉再弹。 */
+let __firstRunGuide = false;
 if (!getFirstRunFlag()) {
-  setTimeout(openGuide, 500);
+  __firstRunGuide = true;
+  openGuide();
 }
 $('#guideOk').onclick = closeGuide;
 /* 「打开微信」：直接把微信拉起来让用户去小程序绑卡。

@@ -82,16 +82,32 @@ public class Api {
     private JSONArray lastOrders = new JSONArray();
     private JSONObject cachedLimit;
 
-    /* 诊断用：最近一次响应的 Date 头原文、收到它时的本机毫秒、来自哪个请求。
-       Date 是 HTTP 强制响应头，每个响应都有，是唯一无需额外接口就能拿到的
-       「服务器自己的时间」。先只观测，不参与任何计算。 */
-    private String lastDateHeader = "";
-    private long lastDateLocalMs = 0L;
-    private String lastDateFrom = "";
+    /* 服务器时钟快照：最近一次响应的 Date 头解析结果，以及收到它时的本机毫秒。
+       Date 是 HTTP 强制响应头，每个响应都带，是唯一不需要额外接口就能拿到的
+       「服务器自己的时间」。实测本校区服务器与手机相差不到 1 秒，
+       所以它足够用来校准倒计时；偏差再大也只影响显示，不影响下单。 */
+    private long srvClockMs = 0L;      // Date 头解析出的服务器时刻
+    private long srvClockLocalMs = 0L; // 收到响应时的本机时刻
+    private String srvClockFrom = "";
 
-    public String diagDateHeader() { return lastDateHeader; }
-    public long diagDateLocalMs() { return lastDateLocalMs; }
-    public String diagDateFrom() { return lastDateFrom; }
+    /** 服务器「当前」时刻（已按收到响应后流逝的本机时间外推）；没测到过返回 0。 */
+    public long serverNowMs() {
+        if (srvClockMs <= 0 || srvClockLocalMs <= 0) return 0L;
+        long elapsed = System.currentTimeMillis() - srvClockLocalMs;
+        // 时钟被手动改过之后 elapsed 可能是个荒谬的值，超过一天就认为快照作废
+        if (elapsed < 0 || elapsed > 86400000L) return 0L;
+        return srvClockMs + elapsed;
+    }
+
+    /** 服务器时刻与本机的差值（服务器 - 本机），毫秒；没测到过返回 0。 */
+    public long serverSkewMs() {
+        if (srvClockMs <= 0 || srvClockLocalMs <= 0) return 0L;
+        return srvClockMs - srvClockLocalMs;
+    }
+
+    public boolean hasServerClock() { return srvClockMs > 0 && srvClockLocalMs > 0; }
+
+    public String serverClockFrom() { return srvClockFrom; }
 
     /** 把 RFC 1123 的 Date 头解析成毫秒（UTC）；解析不出来返回 0。
         形如 "Sat, 08 Nov 2026 16:47:32 GMT"。手写解析而不用 SimpleDateFormat：
@@ -235,12 +251,17 @@ public class Api {
             }
         }
 
-        // 诊断用：记录最近一次响应的服务端 Date 头与本机时刻（毫秒）
+        // 记录最近一次响应的服务端 Date 头，作为当前服务器时刻的基准。
+        // 用收到响应的那一刻做本机基准：网络往返已经被「实际收到」抵消掉，
+        // 剩下的偏差只来自服务器生成响应到发出去之间的那点时间，可忽略。
         String dh = r.header("Date");
         if (dh != null && !dh.isEmpty()) {
-            lastDateHeader = dh;
-            lastDateLocalMs = System.currentTimeMillis();
-            lastDateFrom = path;
+            long parsed = parseHttpDate(dh);
+            if (parsed > 0) {
+                srvClockMs = parsed;
+                srvClockLocalMs = System.currentTimeMillis();
+                srvClockFrom = path;
+            }
         }
 
         InputStream is = (r.code >= 400) ? c.getErrorStream() : c.getInputStream();
