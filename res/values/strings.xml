@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">智水</string>
+    <!-- 取码通知：发在锁屏上，点开 App 之前就能看到验证码 -->
+    <string name="notify_channel_name">取码提醒</string>
+    <string name="notify_channel_desc">有预约时在通知栏和锁屏上显示浴室名称与验证码</string>
 </resources>

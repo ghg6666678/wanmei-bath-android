@@ -765,6 +765,7 @@ function renderOrder() {
   if (!state.orders.length) {
     card.classList.add('hidden');
     card.innerHTML = '';
+    syncLockScreenCode();
     return;
   }
   /* 后台刷新不能在「我的」/「记录」页把验证码卡片翻出来 */
@@ -802,6 +803,34 @@ function renderOrder() {
     b.onclick = () => cancelOrder(b.dataset.cancel, b.dataset.name);
   });
   startCountdown();
+  syncLockScreenCode();
+}
+
+/* 把「浴室名 + 验证码」推到系统常驻通知，锁屏点亮就能看到，不用解锁找 App。
+   这是一条提示性通知，不是前台服务：通知本身由系统托管，App 退到后台、
+   甚至进程被回收之后它都还在；倒计时也是系统渲染的（chronometer），
+   到点由 timeoutAfter 自动收掉，我们不用自己跑定时器。
+
+   没有预约时（含取消后）要主动清掉，否则会留一条过期的码在锁屏上。
+   顺带一提：码会明文显示在锁屏上，室友拿到手机也能看到——不过开阀还得
+   人站到浴室设备前输入，风险有限。 */
+function syncLockScreenCode() {
+  const nat = __native();
+  if (!nat) return;                       /* 浏览器里没有原生桥，直接跳过 */
+  const o = (state.orders || [])[0];
+  const code = o && o.verificationcode ? String(o.verificationcode).trim() : '';
+  try {
+    if (!code) {
+      if (nat.clearOrderCode) nat.clearOrderCode();
+      return;
+    }
+    if (!nat.showOrderCode) return;
+    /* 传绝对失效时刻（已按服务端校准），原生侧用它渲染倒计时并定时消失。
+       多个预约时以第一个为主，标题里带上总数，免得用户以为只有这一个。 */
+    const more = state.orders.length > 1 ? ` · 共 ${state.orders.length} 个` : '';
+    nat.showOrderCode((o.bathroomname || '已预约') + more, code,
+                      verifyExpireAt().getTime());
+  } catch (e) { /* 通知失败不影响取码 */ }
 }
 
 let cdTimer = null;

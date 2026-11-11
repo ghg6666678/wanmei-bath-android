@@ -363,6 +363,136 @@ public class MainActivity extends android.app.Activity {
             getSharedPreferences("bath", MODE_PRIVATE).edit()
                     .putString("firstRunShown", v == null ? "" : v).apply();
         }
+
+        /* ---------- 取码通知：锁屏上直接看验证码 ---------- */
+
+        /** 把「浴室名 + 验证码」推到常驻通知。
+            锁屏不点开 App 就能看到；倒计时交给系统渲染（chronometer），
+            到点自动消失（timeoutAfter），不需要额外的定时任务。 */
+        @JavascriptInterface
+        public void showOrderCode(String name, String code, long expireAtMs) {
+            notifyOrderCode(name, code, expireAtMs);
+        }
+
+        @JavascriptInterface
+        public void clearOrderCode() {
+            cancelOrderCode();
+        }
+    }
+
+    // ---------------- 取码通知 ----------------
+
+    private static final String CH_CODE = "bath_code";
+    private static final int NID_CODE = 1001;
+    private static final int REQ_NOTIFY = 1001;
+
+    /* 用户还没授权时先把要发的内容存着，授权回来再补发，
+       免得「第一次装完正好有预约」这个场景白发一次 */
+    private String pendName;
+    private String pendCode;
+    private long pendExpireMs;
+    private boolean notifyAsked;
+
+    private void ensureCodeChannel() {
+        android.app.NotificationManager nm =
+                (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(CH_CODE) != null) return;
+        android.app.NotificationChannel ch = new android.app.NotificationChannel(
+                CH_CODE, getString(R.string.notify_channel_name),
+                android.app.NotificationManager.IMPORTANCE_LOW);   // 静默：不响铃不震动
+        ch.setDescription(getString(R.string.notify_channel_desc));
+        ch.setShowBadge(false);
+        ch.enableVibration(false);
+        ch.setSound(null, null);
+        /* 锁屏可见：即使系统设置里选了「隐藏敏感通知内容」，这一条也要露出来
+           —— 用户要的正是「点亮屏幕就能看到」，藏起来就没意义了 */
+        ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+        nm.createNotificationChannel(ch);
+    }
+
+    private void notifyOrderCode(String name, String code, long expireAtMs) {
+        try {
+            String c = code == null ? "" : code.trim();
+            if (c.isEmpty()) { cancelOrderCode(); return; }
+            long left = expireAtMs - System.currentTimeMillis();
+            // 已经过期（或没算出有效时间）就不发，避免出现一个 0:00 的常驻通知
+            if (left <= 0) { cancelOrderCode(); return; }
+
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendName = name;
+                pendCode = c;
+                pendExpireMs = expireAtMs;
+                requestNotifyPermission();
+                return;
+            }
+
+            ensureCodeChannel();
+            String title = (name == null || name.trim().isEmpty()) ? "已验证码" : name.trim();
+
+            android.app.Notification.Builder b =
+                    new android.app.Notification.Builder(this, CH_CODE)
+                            .setSmallIcon(R.drawable.ic_stat_bath)
+                            .setContentTitle(title)
+                            .setContentText("验证码 " + c)
+                            .setStyle(new android.app.Notification.BigTextStyle()
+                                    .bigText("验证码 " + c
+                                            + "\n到浴室设备上输入即可开阀，当日有效。"))
+                            .setOngoing(true)          // 常驻，划不掉
+                            .setOnlyAlertOnce(true)    // 刷新时不重复响铃
+                            .setShowWhen(true)
+                            .setUsesChronometer(true)
+                            .setChronometerCountDown(true)   // 显示「还剩多久」
+                            .setWhen(expireAtMs)
+                            .setTimeoutAfter(left)           // 到点自动消失
+                            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                            .setCategory(android.app.Notification.CATEGORY_STATUS)
+                            .setContentIntent(pendingOpenApp());
+
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.notify(NID_CODE, b.build());
+        } catch (Exception ignored) {
+            // 通知失败不能影响取码主流程
+        }
+    }
+
+    private void cancelOrderCode() {
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NID_CODE);
+        } catch (Exception ignored) { }
+    }
+
+    private android.app.PendingIntent pendingOpenApp() {
+        Intent i = new Intent(this, MainActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= android.app.PendingIntent.FLAG_IMMUTABLE;
+        return android.app.PendingIntent.getActivity(this, 0, i, flags);
+    }
+
+    private void requestNotifyPermission() {
+        if (Build.VERSION.SDK_INT < 33 || notifyAsked) return;
+        notifyAsked = true;
+        try {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+        } catch (Exception ignored) { }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(req, perms, results);
+        if (req != REQ_NOTIFY) return;
+        boolean ok = results != null && results.length > 0
+                && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if (ok && pendCode != null && !pendCode.isEmpty()) {
+            notifyOrderCode(pendName, pendCode, pendExpireMs);
+        }
     }
 
     /** 安装包自身的版本信息，取不到时给兜底值，不让前端拿到空对象。 */
