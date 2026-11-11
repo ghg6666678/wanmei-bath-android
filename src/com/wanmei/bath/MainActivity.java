@@ -415,12 +415,6 @@ public class MainActivity extends android.app.Activity {
     private static final int NID_CODE = 1001;
     private static final int REQ_NOTIFY = 1001;
 
-    /* android.app.Notification.FLAG_PROMOTED_ONGOING（API 36 新增）。
-       本地只编译到 SDK 34，拿不到这个常量，所以自己写死数值并注明出处；
-       用错只会导致「没被提升」，不影响通知本身，属安全失败。
-       值取自 platform-36 android.jar，javap -constants 读出 = 262144 (0x40000)。 */
-    private static final int FLAG_PROMOTED_ONGOING = 262144;
-
     /* 用户还没授权时先把要发的内容存着，授权回来再补发，
        免得「第一次装完正好有预约」这个场景白发一次 */
     private String pendName;
@@ -494,12 +488,9 @@ public class MainActivity extends android.app.Activity {
                             .setCategory(android.app.Notification.CATEGORY_STATUS)
                             .setContentIntent(pendingOpenApp());
 
-            /* 先尝试 Android 16 的原生实时通知（兼容的 ROM 会自动「上岛」）。
-               样式会被这里换成 ProgressStyle，所以退回普通样式时再设 BigText。 */
-            if (!applyLiveUpdateStyle(b, c, left)) {
-                b.setStyle(new android.app.Notification.BigTextStyle()
-                        .bigText(room + "\n当日有效，到浴室设备输入即可开阀。"));
-            }
+            /* 给通知加上「可被提升」的特征（Android 16 实时通知 / 上岛）。
+               是否真的被提升由系统决定，不在这里判断——见 applyLiveUpdateFlavor 注释。 */
+            applyLiveUpdateFlavor(b, c, room, left);
 
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -545,8 +536,11 @@ public class MainActivity extends android.app.Activity {
             o.put("channel", has);
             o.put("importance", imp);
             o.put("silent", silent);
-            // 本机是否支持 Android 16 原生实时通知（支持则有机会「上岛」）
-            o.put("live", canPostPromoted());
+            // 本机是否开放了「可被提升」的接口；仅用于向用户解释，不参与功能开关
+            String why = promotedSupport();
+            o.put("live", "yes".equals(why));
+            o.put("liveWhy", why);
+            o.put("sdk", Build.VERSION.SDK_INT);
             o.put("ok", enabled && has && !silent);
         } catch (Exception e) {
             try { o.put("ok", false); } catch (Exception ignored) { }
@@ -585,50 +579,60 @@ public class MainActivity extends android.app.Activity {
        因为本地只编译到 SDK 34，下面这些 API 全走反射，任何一步失败都
        安静退回普通通知（安全失败）。 */
 
-    /** 本机是否支持「可被提升的常驻通知」。API 36 起有 canPostPromotedNotifications；
-        部分 ROM 可能回移到更低版本，所以不按 SDK_INT 卡死，直接试反射。 */
-    private boolean canPostPromoted() {
+    /** 「我能不能被提升」只用于向用户解释，【不再】用它决定要不要补这些特征。
+        它的默认值就是 true，而之前却因为在部分 ROM 上取不到（API 未开放 /
+        反射失败）就把整条路挡死——典型的把探测当开关。
+        返回 yes / no / no_api / err:xxx */
+    private String promotedSupport() {
         try {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm == null) return false;
+            if (nm == null) return "no_service";
             java.lang.reflect.Method m = android.app.NotificationManager.class
                     .getMethod("canPostPromotedNotifications");
             Object r = m.invoke(nm);
-            return (r instanceof Boolean) && ((Boolean) r);
+            if (!(r instanceof Boolean)) return "bad_ret";
+            return ((Boolean) r) ? "yes" : "no";
+        } catch (NoSuchMethodException e) {
+            return "no_api";
         } catch (Throwable t) {
-            return false;   // 方法不存在（API < 36）或 ROM 未实现
+            return "err:" + t.getClass().getSimpleName();
         }
     }
 
-    /** 给通知加上「实时更新」标记，成功返回 true。
-        @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码
-        @param leftMs    距失效还剩多少毫秒，用来推进度条 */
-    private boolean applyLiveUpdateStyle(android.app.Notification.Builder b,
-                                         String shortText, long leftMs) {
-        if (!canPostPromoted()) return false;
-        boolean marked = false;
+    /** 给通知补上「可被提升」所需的特征。判定见 AOSP
+        Notification.hasPromotableCharacteristics()：
+          ongoing 且非分组摘要、无自定义视图、有标题，
+          且（进行中通话样式）或（请求颜色化 且 样式∈{BigText,Call,Progress}）。
+        所以 setColorized(true) 是硬条件——早期版本漏了它，条件永远不成立。
+        注意 USE_COLORIZED_NOTIFICATIONS 是 signature 权限，第三方拿不到；
+        但判定读的是 extras 里 EXTRA_COLORIZED 这个「请求」，与是否真能着色无关。
+        FLAG_PROMOTED_ONGOING 由系统按上面的判定自行设置，应用设了也会被覆盖，
+        这里不设。
+        @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码 */
+    private void applyLiveUpdateFlavor(android.app.Notification.Builder b,
+                                       String shortText, String room, long leftMs) {
+        try { b.setColorized(true); } catch (Throwable ignored) { }
         try {
-            b.getClass().getMethod("setShortCriticalText", String.class).invoke(b, shortText);
-            marked = true;
+            b.getClass().getMethod("setShortCriticalText", String.class)
+                    .invoke(b, shortText);
         } catch (Throwable ignored) { }
-        try {
-            b.getClass().getMethod("setFlag", int.class, boolean.class)
-                    .invoke(b, FLAG_PROMOTED_ONGOING, true);
-            marked = true;
-        } catch (Throwable ignored) { }
-        if (!marked) return false;
 
-        /* 进度条按「当天剩余比例」推进：越接近零点越短。
-           只是形态，失败了不影响上面的提升标记。 */
+        /* 样式：优先 ProgressStyle（带进度条，观感最接近岛），
+           取不到就用 BigTextStyle —— 两者都在可提升样式白名单内。 */
+        boolean styled = false;
         try {
             Class<?> psCls = Class.forName("android.app.Notification$ProgressStyle");
             Object ps = psCls.getConstructor().newInstance();
             int pct = (int) Math.max(0, Math.min(100, leftMs * 100L / 86400000L));
             psCls.getMethod("setProgress", int.class).invoke(ps, pct);
             b.setStyle((android.app.Notification.Style) ps);
+            styled = true;
         } catch (Throwable ignored) { }
-        return true;
+        if (!styled) {
+            b.setStyle(new android.app.Notification.BigTextStyle()
+                    .bigText(room + "\n当日有效，到浴室设备输入即可开阀。"));
+        }
     }
 
     private android.app.PendingIntent pendingOpenApp() {

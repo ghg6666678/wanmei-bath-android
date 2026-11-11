@@ -860,8 +860,12 @@ function notifySetupHint() {
       ④ 同一子类别 → 打开「锁屏显示」<br>
       <span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span><br>
       <span style="opacity:.75">${st && st.live
-        ? '本机支持实时通知，验证码会尝试显示到状态栏/岛上。'
-        : '本机暂不支持 Android 16 实时通知，按普通通知显示（锁屏仍可见）。'}</span>
+        ? '系统报告支持实时通知，验证码会尝试显示到状态栏/岛上。'
+        : '系统未报告实时通知能力（' + ({
+            no_api: '系统未提供该查询接口', no: '系统暂不允许', bad_ret: '读取失败',
+            no_service: '通知服务不可用'
+          }[(st && st.liveWhy) || ''] || '读取失败')
+          + '），仍按实时通知格式提交，未生效则退化为普通通知。'}</span>
       <div style="display:flex;gap:9px;margin-top:10px">
         <button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>
         <button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>
