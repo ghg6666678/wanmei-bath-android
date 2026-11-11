@@ -777,7 +777,7 @@ python tools/audit_apk.py <产物.apk>
 1. `applyLiveUpdateFlavor()` 用 `b.getExtras().putBoolean("android.requestPromotedOngoing", true)` 请求提升（`Builder.build()` 会把 `getExtras()` 合并进 `Notification.extras`，已在 AOSP 源码确认）；平台若有 `setRequestPromotedOngoing(boolean)` 再反射调一次作双保险。`setShortCriticalText` 也改成方法 + extras 双写兜底。
 2. 手设 `FLAG_PROMOTED_ONGOING` 降级为「兼容少数直接读 flag 的 ROM」，注释写明它按规范会被清掉。
 3. `notifyStatus()` 增加 `diag`：读回自己那条通知的 `found / req / short / style / colorized / chars / flagged / flags / canPost`。前端据此分四种情况给文案，不再用探测结果冒充结论。
-4. 新增桥 `openPromotedSettings()`：优先 `android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS`（AOSP 常量名），退而求其次 `android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS`（文档写法），都不存在就回应用通知总设置页。
+4. 新增桥 `openPromotedSettings()`：优先 `android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS`（AOSP 常量名），退而求其次 `android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS`（文档写法），都不存在就回应用通知总设置页。~~这个独立入口保留下来~~——**1.1.3.12 已删除**，理由见 12.4：它和「去设置」实际落到同一页。
 5. 提示框补第 ⑤ 步「流体云显示实时活动」开关，并加「实时活动」直达按钮；诊断显示「通知合格但用户开关没开」时，即使点过「知道了」也会继续提示，避免又卡在没人提醒的地方。
 6. 版本号按约定留在 1.1.3.x：**1.1.3.10 / versionCode 21**，不发 1.1.4。
 
@@ -815,6 +815,29 @@ python tools/audit_apk.py <产物.apk>
 **顺带补的诊断**：`notifyStatus().diag` 增加 `showWhen` / `chron`（读 `android.showWhen`、`android.showChronometer` 两个公开 extras 键），提示框加一行紧凑读回「胶囊「…」· 倒计时关 · 时间显示关 · 样式 BigTextStyle」，便于不接 adb 也能确认倒计时源确实关掉了。`audit_apk.py` 仍会报 `assets/index.html` 含「学校名 / 实测本校区」模式——那是第 11 节正文里的句子，1.1.3.10 起就是这个告警，属既有的模式误报。
 
 **版本**：按约定继续留在 1.1.3.x，**1.1.3.11 / versionCode 22**。仅本地提交，未打 tag、未推送、未发布。
+
+---
+
+### 12.4 提示按设备能力分流、通知排版收尾（1.1.3.12）
+
+用户确认 1.1.3.11 的流体云形态基本符合预期，又提了两处：
+
+**① 「验证码」标签和六位数隔开了**。`setSubText("验证码")` 被厂商单独排成第三行，标签和它要说明的数字中间还夹着浴室名。直接删掉 `setSubText`。现在通知只有两行：标题（验证码）+ 副行（浴室名 · 当日有效），芯片 `shortCriticalText` 仍是纯验证码。通道名本来就叫「验证码显示」，不必再重复一次标签。~~把标题改成「验证码 632664」让两者同行~~ 也想过，但那会在最显眼的一行插进前缀，不如删干净。
+
+**② 提示框还在教用户开「锁屏显示通知」，是错的**。系统开关页下面自己写着：「实时活动会以流体云显示，不受通知设置的影响」。既然不受影响，支持实时活动的机型只要开一个开关就够，原来那套 ①~④ 全是多余甚至误导。于是 `notifySetupHint()` 改成两条互斥路径：
+
+| | 支持实时活动 | 不支持 |
+| --- | --- | --- |
+| 标题 | 打开「流体云显示实时活动」开关 | 想让验证码出现在锁屏上，还需要开一次开关 |
+| 正文 | 只给开关位置：「应用通知」页「允许通知」下方；ColorOS 叫「流体云显示实时活动」，澎湃 OS 4 叫「实时动态」 | ①~④ 四步锁屏通知设置 |
+| 明确不出现 | 「锁屏显示通知」「静默通知」「多数手机默认不允许…」、原第 ⑤ 步 | 第 ⑤ 步、任何实时活动字样 |
+| 按钮 | 知道了 + 去设置 | 知道了 + 去设置 |
+
+**「设备支持」怎么判**：`notifyStatus().liveWhy` 来自反射 `NotificationManager.canPostPromotedNotifications()`。`yes / no / bad_ret` 都说明接口存在（`no` 只是用户开关没开，不是设备不支持），`no_api / err:* / no_service` 才按不支持处理；再叠加 `sdk >= 36`。真正有没有生效仍只看 `diag.flagged`——已经提升时提示框**完全不显示**，不再留一行「已生效 ✓」占地方。提示框里的诊断读回也只在还没上岛时才出现。
+
+**删掉重复按钮**：原「实时活动」按钮走 `openPromotedSettings()`，尝试 resolve 两个实时活动设置页 action，在 ColorOS / 澎湃 OS 上基本都 resolve 不到，最终仍退回 `ACTION_APP_NOTIFICATION_SETTINGS`——和「去设置」是同一个页面。既然开关本来就长在「允许通知」正下方，只保留 `openNotifySettings()` 一个入口，并删掉 `openPromotedSettings()` / `gotoPromotedSettings()` 两个桥方法。
+
+**版本**：按约定继续留在 1.1.3.x，**1.1.3.12 / versionCode 23**。仅本地提交，未打 tag、未推送、未发布。
 
 ---
 

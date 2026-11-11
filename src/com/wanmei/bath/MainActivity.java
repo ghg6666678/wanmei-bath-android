@@ -392,12 +392,6 @@ public class MainActivity extends android.app.Activity {
             gotoCodeNotifySettings();
         }
 
-        /** 直达「实时活动 / 流体云显示实时活动」开关页；系统没有该页就退回通知总设置页。 */
-        @JavascriptInterface
-        public void openPromotedSettings() {
-            gotoPromotedSettings();
-        }
-
         /** 用户点过「知道了」就不再提示锁屏设置。存原生，file:// 下 localStorage 不可靠。 */
         @JavascriptInterface
         public String getNotifyHintDismissed() {
@@ -507,7 +501,10 @@ public class MainActivity extends android.app.Activity {
                     new android.app.Notification.Builder(this, CH_CODE)
                             .setSmallIcon(R.drawable.ic_stat_bath)
                             .setContentTitle(c)
-                            .setSubText("验证码")
+                            /* 1.1.3.12：删掉 setSubText("验证码")。
+                               厂商会把 subText 单独排成第三行，于是「验证码」这个
+                               标签和它要说明的六位数反而隔了两行。通道名已经是
+                               「验证码显示」，芯片和标题又都放码，不必再重复一次。 */
                             .setContentText(room + " · 当日有效")
                             .setOngoing(true)          // 常驻，划不掉
                             .setOnlyAlertOnce(true)    // 刷新时不重复响铃
@@ -567,7 +564,9 @@ public class MainActivity extends android.app.Activity {
             o.put("silent", silent);
             /* 注意语义：canPostPromotedNotifications() 问的是「用户有没有允许本应用发提升通知」，
                不是「系统支不支持实时活动」，更不是「这条通知已经被提升」。
-               真实结果看 diag.flagged / diag.chars，前端已不再把这个值说成「支持」。 */
+               真实结果看 diag.flagged / diag.chars，前端已不再把这个值说成「支持」。
+               1.1.3.12 起前端只用 liveWhy 判断「接口是否存在」（no_api / err / no_service
+               视为不支持），据此切换提示文案，不拿开关状态冒充设备能力。 */
             String why = promotedSupport();
             o.put("live", "yes".equals(why));   // 兼容旧字段名，含义=用户开关允许
             o.put("promotedAllowed", "yes".equals(why));
@@ -581,7 +580,8 @@ public class MainActivity extends android.app.Activity {
         return o.toString();
     }
 
-    /** 跳到本应用的「通知」总设置页（母类）。
+    /** 跳到本应用的「通知」总设置页（母类）。1.1.3.12 起这是唯一的设置入口：
+        「流体云显示实时活动」/「实时动态」开关就在「允许通知」正下方。
         故意【不】直达子类别：母类一旦关掉「允许通知」或「锁屏显示通知」，
         子类别里的开关会被系统隐藏或置灰，用户进去也改不了——反而卡在死路上。
         所以统一停在母类，让用户先开父级，再自己往下点「验证码显示」。 */
@@ -603,29 +603,11 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
-    /** 直达「实时活动」开关页。官方文档写的是 ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS，
-        AOSP 源码里实际常量叫 ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS
-        （值 android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS）。两个都试一遍：
-        不同 ROM 实现不一样，且本地只编译到 SDK 34 拿不到常量，只能用字符串。
-        都不存在就退回应用通知总设置页——用户仍可从那里找到「流体云显示实时活动」。 */
-    private void gotoPromotedSettings() {
-        String[] actions = {
-                "android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS",
-                "android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS"
-        };
-        for (String a : actions) {
-            try {
-                Intent i = new Intent(a);
-                i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (i.resolveActivity(getPackageManager()) != null) {
-                    startActivity(i);
-                    return;
-                }
-            } catch (Exception ignored) { }
-        }
-        gotoCodeNotifySettings();
-    }
+    /* 1.1.3.12 删除了「直达实时活动开关页」的桥（原先的 openPromotedSettings /
+       gotoPromotedSettings）。那个页面在 ColorOS / 澎湃 OS 上基本 resolve 不到，
+       最后还是退回 ACTION_APP_NOTIFICATION_SETTINGS；而「流体云显示实时活动」
+       （澎湃 OS 4 叫「实时动态」）本来就长在「允许通知」正下方。两个按钮跳同一个
+       页面属于重复功能，现在只保留 openNotifySettings 一个入口。 */
 
     /* ---------- Android 16 原生实时通知（Live Updates）----------
        这是「上岛」的第三条路：不是厂商私有 SDK，也不需要白名单。
