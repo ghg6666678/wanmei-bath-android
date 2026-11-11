@@ -415,6 +415,12 @@ public class MainActivity extends android.app.Activity {
     private static final int NID_CODE = 1001;
     private static final int REQ_NOTIFY = 1001;
 
+    /* android.app.Notification.FLAG_PROMOTED_ONGOING（API 36）。
+       本地只编译到 SDK 34 拿不到这个常量，写死数值并注明出处；
+       值取自 platform-36 的 android.jar，javap -constants 读出 = 262144 (0x40000)。
+       设错只会导致「没被提升」，不影响通知本身，属安全失败。 */
+    private static final int FLAG_PROMOTED_ONGOING = 262144;
+
     /* 用户还没授权时先把要发的内容存着，授权回来再补发，
        免得「第一次装完正好有预约」这个场景白发一次 */
     private String pendName;
@@ -600,32 +606,44 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
-    /** 给通知补上「可被提升」所需的特征。判定见 AOSP
-        Notification.hasPromotableCharacteristics()：
-          ongoing 且非分组摘要、无自定义视图、有标题，
-          且（进行中通话样式）或（请求颜色化 且 样式∈{BigText,Call,Progress}）。
-        所以 setColorized(true) 是硬条件——早期版本漏了它，条件永远不成立。
-        注意 USE_COLORIZED_NOTIFICATIONS 是 signature 权限，第三方拿不到；
-        但判定读的是 extras 里 EXTRA_COLORIZED 这个「请求」，与是否真能着色无关。
-        FLAG_PROMOTED_ONGOING 由系统按上面的判定自行设置，应用设了也会被覆盖，
-        这里不设。
+    /** 请求提升（等价于 AndroidX 的 setRequestPromotedOngoing(true)）。
+        平台侧没有 setRequestPromotedOngoing，那是 AndroidX 的兼容封装，
+        它内部就是设 FLAG_PROMOTED_ONGOING 这个位——所以这里直接设位。
+        FLAG_PROMOTED_ONGOING = 0x00040000（platform-36 javap -constants 读出）。 */
+    private void requestPromoted(android.app.Notification.Builder b) {
+        try {
+            b.getClass().getMethod("setFlag", int.class, boolean.class)
+                    .invoke(b, FLAG_PROMOTED_ONGOING, true);
+        } catch (Throwable ignored) { }
+    }
+
+    /** 给通知补上「可被提升」所需的特征。
+        依据官方 Live Updates 文档 + InstallerX-Revived 的实测实现：
+          必须声明 POST_PROMOTED_NOTIFICATIONS（清单里已加）
+          必须 ongoing、有 contentTitle、无自定义视图、非分组摘要
+          必须请求提升（FLAG_PROMOTED_ONGOING）
+          样式须为 Standard / BigText / Call / Progress / Metric
+          【不能】setColorized(true)——早期版本我按旧版 AOSP 分支的判定加了它，
+          但那版要求「请求颜色化」，与现行文档和实机实现都相反，已移除。
         @param shortText 状态栏芯片/岛上显示的那几个字——这里直接放验证码 */
     private void applyLiveUpdateFlavor(android.app.Notification.Builder b,
                                        String shortText, String room, long leftMs) {
-        try { b.setColorized(true); } catch (Throwable ignored) { }
+        requestPromoted(b);
         try {
             b.getClass().getMethod("setShortCriticalText", String.class)
                     .invoke(b, shortText);
         } catch (Throwable ignored) { }
 
         /* 样式：优先 ProgressStyle（带进度条，观感最接近岛），
-           取不到就用 BigTextStyle —— 两者都在可提升样式白名单内。 */
+           取不到就用 BigTextStyle —— 两者都在可提升样式白名单内。
+           ProgressStyle 不设 segments 时 max 默认 100，所以进度直接给百分比。 */
         boolean styled = false;
         try {
             Class<?> psCls = Class.forName("android.app.Notification$ProgressStyle");
             Object ps = psCls.getConstructor().newInstance();
             int pct = (int) Math.max(0, Math.min(100, leftMs * 100L / 86400000L));
             psCls.getMethod("setProgress", int.class).invoke(ps, pct);
+            psCls.getMethod("setStyledByProgress", boolean.class).invoke(ps, true);
             b.setStyle((android.app.Notification.Style) ps);
             styled = true;
         } catch (Throwable ignored) { }

@@ -687,16 +687,20 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 
 #### 实现：编译期只到 SDK 34，所以全走反射
 
-本地构建链只有 `platform-34`，而 Live Updates 是 API 36，因此不新增编译依赖，改用反射 + 能力检测，任何一步失败都**安静退回普通通知**（安全失败）：
+本地构建链只有 `platform-34`，而 Live Updates 是 API 36，因此不新增编译依赖，改用反射（失败即安静退回普通通知）：
 
 | 用途 | API | 说明 |
 | --- | --- | --- |
-| 能力检测 | `NotificationManager.canPostPromotedNotifications()` | 本机是否支持被提升 |
-| 请求提升 | `FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)` | 常量值由 `platform-36` 的 `javap -constants` 读出后写死 |
+| **声明权限** | `<uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />` | **缺了它，系统设置里连「流体云显示实时活动」开关都不出现**（对照 InstallerX-Revived 的清单确认） |
+| 请求提升 | `FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)` | 平台没有 `setRequestPromotedOngoing`，那是 AndroidX 封装，内部就是设这个位；常量值由 `platform-36` 的 `javap -constants` 读出 |
 | 岛/芯片文案 | `Builder.setShortCriticalText(String)` | 直接放验证码 |
-| 进度形态 | `Notification$ProgressStyle.setProgress(int)` | 按当天剩余比例推进 |
+| 进度形态 | `ProgressStyle.setProgress(int)` + `setStyledByProgress(true)` | 不设 segments 时 max 默认 100，故直接传百分比 |
+| ~~颜色化~~ | ~~`setColorized(true)`~~ | **不能设**。官方文档明确「Must NOT setColorized to TRUE」；早期按 android16-release 某个分支的判定加了它，与现行文档和实机实现相反，已移除 |
 
-`notifyStatus()` 会返回 `live` 字段，界面据此说明「本机支持/不支持实时通知」。
+**踩坑记录（两层）**：
+
+1. 最初把 `canPostPromotedNotifications()` 当功能开关。它在 AOSP 里只是读一个 per-package 偏好（默认 `true`），一旦反射取不到就把整条路挡死。现在它只用于向用户解释。
+2. 真正致命的是**漏声明 `POST_PROMOTED_NOTIFICATIONS`**。现象是：通知照常发，但系统设置里根本没有「实时活动」这一项，也无法被提升。对照能正常上岛的 InstallerX-Revived 才定位到。
 
 #### 其余实现要点
 
