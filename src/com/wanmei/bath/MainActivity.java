@@ -413,6 +413,19 @@ public class MainActivity extends android.app.Activity {
                     .putString("starDorm", name == null ? "" : name).apply();
         }
 
+        /** 余额提醒阈值（1.1.3.18）：'off' 或元数（'0.5'~'10'）。空串=还没设置过，
+            前端回落默认 5。仍存原生——file:// 下 localStorage 不可靠（同 starDorm）。 */
+        @JavascriptInterface
+        public String getBalThresh() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("balThresh", "");
+        }
+
+        @JavascriptInterface
+        public void setBalThresh(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("balThresh", v == null ? "" : v).apply();
+        }
+
         /** 首次启动标记：看过一次引导后就不再弹。存原生，file:// 下 localStorage 不可靠。 */
         @JavascriptInterface
         public String getFirstRunFlag() {

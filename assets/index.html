@@ -409,6 +409,17 @@ input[type=tel]::placeholder{color:var(--ink3)}
       达到限时或限额设备会自动关阀；想继续用，在设备上重新输入同一个验证码即可再开（验证码当日有效）。
     </div>
 
+    <div class="sec-title"><h3>余额提醒</h3></div>
+    <section class="card">
+      <div class="setrow" id="rowBalTh">
+        <div class="grow">
+          <div class="name">提醒阈值</div>
+          <div class="info" id="balThInfo">余额低于该值时标记「偏低」，预约时也会提醒</div>
+        </div>
+        <div class="val"><span id="valBalTh">—</span><i>›</i></div>
+      </div>
+    </section>
+
     <div class="sec-title"><h3>验证码显示</h3></div>
     <section class="card">
       <div class="setrow" id="rowNotify">
@@ -764,8 +775,11 @@ function renderBalance() {
   if (v === null || v === undefined) { $('#balNum').textContent = '—'; return; }
   $('#balNum').textContent = Number(v).toFixed(2);
   const p = $('#balPill');
+  /* 阈值可由用户在「我的 → 余额提醒」里设置（默认 5 元，可关闭）；
+     ≤ 0 的「余额不足」与阈值无关，关掉提醒也照样标。 */
+  const th = balThresh();
   if (Number(v) <= 0) { p.className = 'pill danger'; p.textContent = '余额不足'; }
-  else if (Number(v) < 5) { p.className = 'pill warn'; p.textContent = '偏低'; }
+  else if (th !== null && Number(v) < th) { p.className = 'pill warn'; p.textContent = '偏低'; }
   else { p.className = 'pill'; p.textContent = '正常'; }
 }
 
@@ -1074,6 +1088,39 @@ function setStar(v) {
     else localStorage.removeItem('starDorm');
   } catch (e) { }
 }
+/* 余额提醒阈值（元）。存法与星标楼栋一致：原生优先，浏览器回落 localStorage。
+   取值：'off'（关闭）或 '0.5' ~ '10'；空串/非法值回落到默认 5。
+   历史包袱：1.1.3.17 之前这个 5 元是写死的（renderBalance 里 Number(v) < 5）。 */
+function getBalTh() {
+  let v = '';
+  if (typeof Android !== 'undefined' && Android.getBalThresh) {
+    try { v = Android.getBalThresh() || ''; } catch (e) { }
+  }
+  if (!v) { try { v = localStorage.getItem('balThresh') || ''; } catch (e) { } }
+  return v;
+}
+function setBalTh(v) {
+  if (typeof Android !== 'undefined' && Android.setBalThresh) {
+    try { Android.setBalThresh(v || ''); return; } catch (e) { }
+  }
+  try {
+    if (v) localStorage.setItem('balThresh', v);
+    else localStorage.removeItem('balThresh');
+  } catch (e) { }
+}
+/* 阈值转数字：'off' / 空 / 非法 → null（不提醒）。余额 ≤ 0 的「余额不足」
+   是事实陈述，不归阈值管，关掉提醒也照样显示。 */
+function balThNum() {
+  const v = getBalTh();
+  if (!v || v === 'off') return null;
+  const n = Number(v);
+  return (n > 0 && n <= 20) ? n : 5;
+}
+/* 常驻生效值（含默认）：null 表示关闭提醒 */
+function balThresh() {
+  const v = getBalTh();
+  return v === 'off' ? null : (balThNum() || 5);
+}
 /* 「一号宿舍a区」「一号宿舍b区」→ 同一栋「一号宿舍」 */
 function dormKey(r) {
   const s = String(r.bathroomname || '').trim();
@@ -1208,6 +1255,9 @@ function renderMe() {
   $('#valTime').textContent = st.max_time_limit ? st.max_time_limit + ' 分钟' : '—';
   const fareFen = Number(st.max_fare_limit || 0);
   $('#valFare').textContent = fareFen ? (fareFen >= 500000 ? '不限' : (fareFen / 100) + ' 元') : '—';
+  /* 余额提醒阈值：本地偏好，不走服务端，读一下持久化值直接显示 */
+  const bth = getBalTh();
+  $('#valBalTh').textContent = (bth === 'off') ? '关闭' : (balThresh() + ' 元');
   const ver = state.appVersion || APP_VERSION;
   $('#valVersion').textContent = ver;
   const upd = state.update && state.update.latest;
@@ -1351,6 +1401,13 @@ function openBook(code) {
   warns.push(`本次限时 ${tmin} 分钟、限额 ${fare} 元，均从设备开阀后开始累计。`);
   if (state.balance !== null && Number(state.balance) <= 0) {
     warns.push('水控余额为 0，开阀可能失败，建议先充值。');
+  } else if (state.balance !== null) {
+    /* 用户设了提醒阈值且余额已跌破：给一句提示。关掉（off）或没跌破就不说。 */
+    const th = balThresh();
+    if (th !== null && Number(state.balance) < th) {
+      warns.push('水控余额 ' + Number(state.balance).toFixed(2)
+        + ' 元，已低于 ' + th + ' 元的提醒线，建议先充值。');
+    }
   }
   w.innerHTML = warns.join('<br>');
   w.style.display = 'block';
@@ -1861,6 +1918,24 @@ $('#rowFare').onclick = () => {
 $('#rowNotify').onclick = () => {
   const nat = __native();
   if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
+};
+
+/* 余额提醒阈值：离散档位比自由输入更合适——它只是条提醒线，精确到分没有
+   意义；「关闭」也是一档，放同一个选择器里，不用另做开关。 */
+$('#rowBalTh').onclick = () => {
+  const cur = getBalTh() || '5';
+  const opts = ['off', '0.5', '1', '2', '3', '5', '10'].map(v => ({
+    v: v, label: v === 'off' ? '关闭' : (Number(v) + ' 元')
+  }));
+  openPicker('余额提醒阈值',
+    '余额低于该值时首页标记「偏低」，预约时给出提醒；选「关闭」则不再提醒（余额为 0 仍会提示）。',
+    opts, cur, v => {
+      setBalTh(v);
+      /* 阈值变了立刻反映到首页胶囊和本行数值，不等下次 loadAll */
+      renderBalance();
+      const span = $('#valBalTh');
+      if (span) span.textContent = (v === 'off') ? '关闭' : (Number(v) + ' 元');
+    });
 };
 
 /* ---------- 充值说明弹层：只给指引并打开微信，不处理支付 ---------- */
