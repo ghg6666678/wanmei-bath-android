@@ -378,11 +378,40 @@ public class MainActivity extends android.app.Activity {
         public void clearOrderCode() {
             cancelOrderCode();
         }
+
+        /** 通知是否真的能在锁屏露出来。前端据此决定要不要给「去设置」的提示。
+            返回 {ok, enabled, channel, silent, importance, locked}。 */
+        @JavascriptInterface
+        public String notifyStatus() {
+            return codeNotifyStatus();
+        }
+
+        /** 跳到本应用的「验证码显示」类别设置页，让用户直接改静默/锁屏显示。 */
+        @JavascriptInterface
+        public void openNotifySettings() {
+            gotoCodeNotifySettings();
+        }
+
+        /** 用户点过「知道了」就不再提示锁屏设置。存原生，file:// 下 localStorage 不可靠。 */
+        @JavascriptInterface
+        public String getNotifyHintDismissed() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("notifyHint", "");
+        }
+
+        @JavascriptInterface
+        public void setNotifyHintDismissed(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("notifyHint", v == null ? "" : v).apply();
+        }
     }
 
-    // ---------------- 取码通知 ----------------
+    // ---------------- 验证码显示通知 ----------------
 
-    private static final String CH_CODE = "bath_code";
+    /* 通道 id 带 v2：通道一旦创建，重要级别就改不了了（系统不允许程序覆盖用户
+       改过的设置）。第一版用了 IMPORTANCE_LOW，在「子类别」里被归成「静默通知」，
+       结果锁屏不显示。所以必须换一个新 id 重建，旧的在 ensureCodeChannel 里删掉。 */
+    private static final String CH_CODE = "bath_code_v2";
+    private static final String CH_CODE_OLD = "bath_code";
     private static final int NID_CODE = 1001;
     private static final int REQ_NOTIFY = 1001;
 
@@ -397,14 +426,22 @@ public class MainActivity extends android.app.Activity {
         android.app.NotificationManager nm =
                 (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
+        /* 清掉第一版那个「静默」通道，否则设置里会留一个永远不显示在锁屏的旧类别 */
+        try {
+            if (nm.getNotificationChannel(CH_CODE_OLD) != null) {
+                nm.deleteNotificationChannel(CH_CODE_OLD);
+            }
+        } catch (Exception ignored) { }
         if (nm.getNotificationChannel(CH_CODE) != null) return;
+        /* 用 IMPORTANCE_DEFAULT 而不是 LOW：LOW 会被系统归进「静默通知」，
+           静默通知不点亮锁屏、也不在锁屏上展开——那这个功能就白做了。
+           DEFAULT 允许系统发出提示音并显示在锁屏上；同一条通知刷新时有
+           onlyAlertOnce 兜着，不会反复响。 */
         android.app.NotificationChannel ch = new android.app.NotificationChannel(
                 CH_CODE, getString(R.string.notify_channel_name),
-                android.app.NotificationManager.IMPORTANCE_LOW);   // 静默：不响铃不震动
+                android.app.NotificationManager.IMPORTANCE_DEFAULT);
         ch.setDescription(getString(R.string.notify_channel_desc));
         ch.setShowBadge(false);
-        ch.enableVibration(false);
-        ch.setSound(null, null);
         /* 锁屏可见：即使系统设置里选了「隐藏敏感通知内容」，这一条也要露出来
            —— 用户要的正是「点亮屏幕就能看到」，藏起来就没意义了 */
         ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
@@ -430,16 +467,18 @@ public class MainActivity extends android.app.Activity {
             }
 
             ensureCodeChannel();
-            String title = (name == null || name.trim().isEmpty()) ? "已验证码" : name.trim();
+            String room = (name == null || name.trim().isEmpty()) ? "已预约" : name.trim();
 
+            /* 验证码放标题、浴室名退到副行：同一栋楼不会变，每次要看的是那六个数字，
+               锁屏上标题字号最大、最粗，才是该给它占的位置。 */
             android.app.Notification.Builder b =
                     new android.app.Notification.Builder(this, CH_CODE)
                             .setSmallIcon(R.drawable.ic_stat_bath)
-                            .setContentTitle(title)
-                            .setContentText("验证码 " + c)
+                            .setContentTitle(c)
+                            .setSubText("验证码")
+                            .setContentText(room + " · 当日有效")
                             .setStyle(new android.app.Notification.BigTextStyle()
-                                    .bigText("验证码 " + c
-                                            + "\n到浴室设备上输入即可开阀，当日有效。"))
+                                    .bigText(room + "\n当日有效，到浴室设备输入即可开阀。"))
                             .setOngoing(true)          // 常驻，划不掉
                             .setOnlyAlertOnce(true)    // 刷新时不重复响铃
                             .setShowWhen(true)
@@ -465,6 +504,69 @@ public class MainActivity extends android.app.Activity {
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(NID_CODE);
         } catch (Exception ignored) { }
+    }
+
+    /** 通知能不能真的露在锁屏上。前端据此决定要不要给「去设置」的提示。
+        注意：厂商的「静默通知」开关没有公开 API，这里只能用好坏程度的近似
+        ——importance <= LOW 视为静默；DEFAULT 及以上则认为是正常通知。 */
+    private String codeNotifyStatus() {
+        JSONObject o = new JSONObject();
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            boolean perm = Build.VERSION.SDK_INT < 33
+                    || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            boolean enabled = nm != null && nm.areNotificationsEnabled() && perm;
+            boolean has = false;
+            int imp = -1;
+            boolean silent = true;
+            if (nm != null) {
+                android.app.NotificationChannel ch = nm.getNotificationChannel(CH_CODE);
+                if (ch != null) {
+                    has = true;
+                    imp = ch.getImportance();
+                    silent = imp <= android.app.NotificationManager.IMPORTANCE_LOW;
+                }
+            }
+            o.put("enabled", enabled);
+            o.put("perm", perm);
+            o.put("channel", has);
+            o.put("importance", imp);
+            o.put("silent", silent);
+            o.put("ok", enabled && has && !silent);
+        } catch (Exception e) {
+            try { o.put("ok", false); } catch (Exception ignored) { }
+        }
+        return o.toString();
+    }
+
+    /** 跳到本应用「验证码显示」这个类别的设置页，用户一步就能关掉静默、打开锁屏显示。 */
+    private void gotoCodeNotifySettings() {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+            i.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_CODE);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            // 个别 ROM 没有类别页，退回应用通知总设置，再不行退回应用详情
+            try {
+                Intent i2 = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                i2.putExtra("app_package", getPackageName());
+                i2.putExtra("app_uid", getApplicationInfo().uid);
+                i2.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i2);
+            } catch (Exception e2) {
+                try {
+                    Intent i3 = new Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    i3.setData(Uri.parse("package:" + getPackageName()));
+                    i3.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i3);
+                } catch (Exception ignored) { }
+            }
+        }
     }
 
     private android.app.PendingIntent pendingOpenApp() {

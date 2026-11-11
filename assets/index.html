@@ -804,6 +804,61 @@ function renderOrder() {
   });
   startCountdown();
   syncLockScreenCode();
+  /* 通知发出去之后再判断要不要提示设置——通道是在发通知时才创建的，
+     先判会得到「通道不存在」的误报 */
+  const hint = notifySetupHint();
+  if (hint) {
+    card.insertAdjacentHTML('beforeend', hint);
+    const fix = $('#btnNotifyFix');
+    if (fix) fix.onclick = () => {
+      const nat = __native();
+      if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
+    };
+    const ok = $('#btnNotifyHintOk');
+    if (ok) ok.onclick = () => {
+      const nat = __native();
+      if (nat && nat.setNotifyHintDismissed) {
+        try { nat.setNotifyHintDismissed('1'); } catch (e) { }
+      }
+      const box = $('#notifyHintBox');
+      if (box) box.remove();
+    };
+  }
+}
+
+/* 锁屏看不到验证码时，把该改的四处设置直接写出来，并给一个直达入口。
+   为什么不只在「检测到有问题」时提示：厂商的「静默通知」开关没有公开 API，
+   检测不准。所以首次有预约时先提示一次，用户点「知道了」后不再打扰；
+   真检测到权限没给（这种情况 API 是准的）仍然会再提示。 */
+function notifySetupHint() {
+  const nat = __native();
+  if (!nat || !nat.notifyStatus) return '';
+  let st = null;
+  try { st = JSON.parse(String(nat.notifyStatus() || '{}')); } catch (e) { return ''; }
+  if (st && st.ok) return '';
+  let dismissed = false;
+  try {
+    dismissed = !!(nat.getNotifyHintDismissed && nat.getNotifyHintDismissed() === '1');
+  } catch (e) { }
+  /* 权限被明确拒掉属于硬错误，即使点过「知道了」也继续提示 */
+  const hard = st && st.perm === false;
+  if (dismissed && !hard) return '';
+
+  const why = (st && st.perm === false)
+    ? '通知权限还没给。'
+    : ((st && st.silent) ? '这条通知现在被归进了「静默通知」，锁屏不会展开它。' : '');
+
+  return `<div class="warnbox" id="notifyHintBox" style="margin:12px 16px 16px;line-height:1.8">
+      <strong>锁屏上看不到验证码？</strong>${why ? '<br>' + why : ''}<br>
+      在系统设置里确认这四项：<br>
+      ① 允许通知　② 打开「锁屏显示」<br>
+      ③ 子类别「<strong>验证码显示</strong>」里关掉「静默通知」<br>
+      ④ 同一页里打开「锁屏显示」
+      <div style="display:flex;gap:9px;margin-top:10px">
+        <button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>
+        <button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>
+      </div>
+    </div>`;
 }
 
 /* 把「浴室名 + 验证码」推到系统常驻通知，锁屏点亮就能看到，不用解锁找 App。
