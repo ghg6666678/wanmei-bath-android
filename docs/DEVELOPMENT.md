@@ -863,7 +863,7 @@ python tools/audit_apk.py <产物.apk>
 1. `notifySetupHint()` 不再把「权限没给 / 实时活动开关没开」算成硬错误。原逻辑 `hard = perm === false || switchOff` 会在用户**刚关掉总闸**时反复弹提示框劝他打开，是全项目里最明显的一处「不尊重用户决定」。现在 `dismissed` 一律生效；`perm === false || enabled === false` 时连提示框都不出现（后者覆盖 Android 8~12 没有运行时权限、只能在系统设置里关总闸的情形）。`switchOff` 与劝开权限的 `permLine` 一并删除。
 2. **「我的」页新增「验证码显示」分区**：一行静态状态（`已关闭 / 已生效 / 未开启`）+ 点击跳应用通知设置页。复用 `notifyStatus()` 与 `openNotifySettings()`，**没有新增原生桥**。关掉总闸后系统子项全隐藏、提示框也不显示，App 内只剩这一条路能让用户找回来——不弹、不催，但不把路堵死。
 3. 把「明文显示」的告知从代码注释挪到用户可见处：「我的」页的静态说明 + 首次提示框（实时活动与老设备两条路径都补了）。文案只陈述事实和撤回方式，删掉「风险有限」这类由代码替用户下的结论，并写明「关掉应用级『允许通知』即可，验证码仍可在 App 内查看」。
-4. 原本考虑在 `onRequestPermissionsResult` 记一个 `notifyDenied` 避免冷启动重复申请，实测后删掉：用户是从系统设置关的总闸，`checkSelfPermission` 多半仍是 granted，`nm.notify()` 被系统静默丢弃，不存在重复打扰。
+4. ~~原本考虑在 `onRequestPermissionsResult` 记一个 `notifyDenied` 避免冷启动重复申请，实测后删掉：用户是从系统设置关的总闸，`checkSelfPermission` 多半仍是 granted，`nm.notify()` 被系统静默丢弃，不存在重复打扰。~~ → **这句判断错了，1.1.3.15 已推翻**：那次「实测」只覆盖了「不重启 App」的路径。AOSP 撤销 `POST_NOTIFICATIONS` 时会 `killUidForPermissionChange()` 杀进程，回到 App 是重建、内存标志归零，于是又弹一次权限请求。`notifyDenied` 这类持久化标记恰恰是必需的，详见 12.7。
 
 **与第 13 节那条原则的关系**：「别在使用者设备上替对方做决定」在这里具体落成三件事——**不新增重复开关、不反复催促、把取舍和退出路径明说出来**。`VISIBILITY_PUBLIC` 与 `setOngoing(true)` 保持不变：它们是「锁屏直接看码」这个功能本身的定义，且已由总闸兜住，不需要 App 再 self-limit。
 
@@ -913,6 +913,46 @@ python tools/audit_apk.py <产物.apk>
 **为什么不引入 AndroidX**：InstallerX 用 `NotificationCompat.Builder`，好处是兼容层替它处理版本差异。本项目是手工 `aapt2 + javac + d8` 的单 dex 构建（约 87 KB），引入 AAR 要处理资源合并、`R` 类冲突、传递依赖与体积膨胀。既然 compileSdk 36 已经让平台 API 直接可用，按 SDK 自己做一次分流即可达到同样的效果，不值得为此改构建链。
 
 **版本**：按约定继续留在 1.1.3.x，**1.1.3.14 / versionCode 25**。仅本地提交，未打 tag、未推送、未发布。
+
+---
+
+### 12.7 权限状态跨进程：一个系统机制引发的两个 bug（1.1.3.15）
+
+**用户实测现象**：① 在系统设置里「开启通知」后，要重启软件才生效；② 「关闭通知」后回到软件，软件会重启，并且再次弹通知权限请求。
+
+**先定性：软件重启是系统机制，不是 bug**。AOSP `PermissionManagerServiceImpl.java` 的 `PermissionCallback.onPermissionRevoked()` 里有：
+
+```java
+mHandler.post(() -> {
+    if (POST_NOTIFICATIONS.equals(permissionName)
+            && isAppBackupAndRestoreRunning(uid)) return;
+    killUid(appId, userId, KILL_APP_REASON_PERMISSIONS_REVOKED);
+});
+```
+
+`PermissionManagerService.killUid()` 的注释也直说「调用后应用可能立即重启」，内部走 `IActivityManager.killUidForPermissionChange()`。系统还专门留了 `revokePostNotificationPermissionWithoutKillForTest()` 给测试用——「WithoutKill」这个后缀本身就是反证。所以关掉通知 → 进程被杀 → 按返回键回 App 时重建 Activity、WebView 重新 `loadUrl`，看起来就是重启。第三方应用无法也不该阻止。
+
+**关键的不对称**：`onPermissionGranted()` 只有 `onPermissionsChanged(uid)` 和 `writeSettings(true)`，**不杀进程**。App 还停在原进程里，`onResume()` 是唯一能感知到「权限刚被打开」的机会。两个 bug 都是这个不对称的下游后果：
+
+| # | bug | 根因 |
+| --- | --- | --- |
+| 1 | 关掉权限回来又弹权限请求 | `notifyAsked` 只是个实例字段，进程被 kill 重建后归零；WebView 重新加载 → `loadAll()` → `renderOrder()` → `syncLockScreenCode()` → `showOrderCode()` → 权限检查失败 → 又调 `requestNotifyPermission()`。这直接违背 12.5 刚定的「尊重用户关掉通知的决定」 |
+| 2 | 开启权限后要重启才生效 | `onResume()` 只调 `__onShow()`，而前端有 30 秒防抖；去设置页打个来回通常不到 30 秒，刷新被挡 → 不重新 `syncLockScreenCode()`。此外 `pendCode` 只在 `onRequestPermissionsResult()` 里补发，用户在系统设置里手动开权限**没有这个回调** |
+
+12.5 里那句「实测不存在重复申请打扰，所以取消 `notifyDenied` 标记」被证伪：那次观察只覆盖了不重启 App 的路径。已用删除线保留并订正。
+
+**改动**：
+
+1. **把「用户决定」持久化到原生**。`SharedPreferences("bath")` 新增两个标记：`notifyPermAsked`（弹过一次系统权限对话框）、`notifyPermGrantedEver`（权限曾被授予过）。`requestNotifyPermission()` 只要任一为真就直接返回——**只在首次安装后第一次有预约时问一次**。标记在 `requestPermissions()` **之前**写，避免弹窗期间被杀进程后重建又弹。
+2. **升级迁移** `migrateNotifyPermissionDecision()`：1.1.3.15 之前这两个键都不存在，老用户升级后第一次关权限仍会被弹一次。用「有登录态 token / phone」判定不是全新安装，直接记为已决定；当前有权限则记下「曾授予过」。全新安装仍保留首次问一次的机会。
+3. **`onResume()` 检测权限状态变化**：记录 `lastNotifyPerm`，`false → true` 时补发挂起的 `pendCode`，并调 `__onShow(true)` 让前端绕过 30 秒防抖立刻 `loadAll()`；`onRequestPermissionsResult()` 授权成功时也强制刷一次，把首页提示和「我的」页状态同步更新。`onCreate()` 以当前真实权限为基线，避免首次启动被误判成「刚被打开」。
+4. 前端 `window.__onShow(force)` 新增 `force` 参数，只影响防抖判断，弹层开着 / 未登录的保护不变。
+5. **顺带修一个相关隐患**：`pendCode` 原先发出后不清空，用户取消预约再开关一次权限会把已取消的码复活。现在 `notifyOrderCode()` 发成功、`cancelOrderCode()` 都清空挂起内容。
+6. `codeNotifyStatus()` 和 `notifyOrderCode()` 统一复用 `hasNotifyPermission()`，不再各写一遍 `checkSelfPermission`。
+
+**验证时怎么区分**：从系统设置里**开启**通知 → 不杀进程，回来应立即出现通知与「已生效」，不需要重启也不用等 30 秒；**关闭**通知 → 系统会杀进程（这一步无法消除），回来后不应再弹权限对话框，「我的」页显示「已关闭」且没有提示框。
+
+**版本**：按约定继续留在 1.1.3.x，**1.1.3.15 / versionCode 26**。仅本地提交，未打 tag、未推送、未发布。
 
 ---
 

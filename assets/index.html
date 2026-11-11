@@ -2631,13 +2631,17 @@ window.__onBack = function () {
   return false;
 };
 
-/* 每次回到前台静默刷新：登录态可能过期，能拉到数据就说明仍然有效 */
+/* 每次回到前台静默刷新：登录态可能过期，能拉到数据就说明仍然有效。
+   1.1.3.15：原生在 onResume 检测到 POST_NOTIFICATIONS 从「关」变「开」时会
+   传 force=true。授予权限时 AOSP 不杀进程，App 停在原进程里，这次 onResume
+   是唯一能感知变化的机会；而 30 秒防抖本来会把它挡掉（去设置页打个来回通常
+   不到 30 秒），表现就是「开启通知要重启软件才生效」。 */
 let __lastShow = 0;
-window.__onShow = function () {
+window.__onShow = function (force) {
   if (document.querySelector('.sheet.on')) return;   // 弹层开着，别打断
   if (!((state.cfg || {}).hasToken)) return;         // 还没登录，无需刷新
   const now = Date.now();
-  if (now - __lastShow < 30000) return;              // 30 秒内不重复请求
+  if (!force && now - __lastShow < 30000) return;    // 30 秒内不重复请求
   __lastShow = now;
   loadAll();
 };

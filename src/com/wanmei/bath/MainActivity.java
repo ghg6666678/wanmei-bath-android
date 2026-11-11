@@ -33,11 +33,14 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // 以当前真实状态为基线，避免首次启动被误判成「权限刚被打开」
+        lastNotifyPerm = hasNotifyPermission();
 
         applySystemBars();
 
         cfg = Store.load(this);
         api.setConfig(cfg);
+        migrateNotifyPermissionDecision();
 
         FrameLayout root = new FrameLayout(this);
         root.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
@@ -103,9 +106,67 @@ public class MainActivity extends android.app.Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 每次回到前台都让页面刷一次（登录态可能已过期），前端自己做了 30 秒防抖
+        /* 权限可能在系统设置页里被改动。
+           AOSP 的不对称：撤销 POST_NOTIFICATIONS 会 killUid 杀进程（所以回到 App
+           是重建，页面从头 loadAll，天然会重发通知）；但【授予不杀进程】，App 还
+           停在原来的进程里，只有 onResume 这一次机会感知到变化。
+           以前 onResume 只调 __onShow()，而前端有 30 秒防抖，从设置页打个来回
+           通常不到 30 秒 → 刷新被挡 → 通知不重发，看起来就是「要重启才生效」。 */
+        boolean now = hasNotifyPermission();
+        boolean justGranted = !lastNotifyPerm && now;
+        lastNotifyPerm = now;
+        if (now) markNotifyGrantedEver();
+
+        /* 用户在系统设置里手动打开权限：没有 onRequestPermissionsResult 回调，
+           pendCode 只能靠这里补发。授权对话框那条路仍走原来的回调，两者互不干扰。
+           即便这里有弹层挡住前端刷新，通知本身也已经补上了。 */
+        if (justGranted && pendCode != null && !pendCode.isEmpty()) {
+            notifyOrderCode(pendName, pendCode, pendExpireMs);
+        }
+
         if (web != null) {
-            web.evaluateJavascript("(window.__onShow ? window.__onShow() : 0)", null);
+            // justGranted 时传 true 让前端绕过 30 秒防抖，立刻刷新状态与通知
+            String call = justGranted
+                    ? "(window.__onShow ? window.__onShow(true) : 0)"
+                    : "(window.__onShow ? window.__onShow() : 0)";
+            web.evaluateJavascript(call, null);
+        }
+    }
+
+    private android.content.SharedPreferences notifyPrefs() {
+        return getSharedPreferences("bath", MODE_PRIVATE);
+    }
+
+    private boolean hasNotifyPermission() {
+        return Build.VERSION.SDK_INT < 33
+                || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void markNotifyGrantedEver() {
+        if (!notifyPrefs().getBoolean(PREF_NOTIFY_GRANTED_EVER, false)) {
+            notifyPrefs().edit().putBoolean(PREF_NOTIFY_GRANTED_EVER, true).apply();
+        }
+    }
+
+    private boolean notifyPermissionDecided() {
+        return notifyPrefs().getBoolean(PREF_NOTIFY_ASKED, false)
+                || notifyPrefs().getBoolean(PREF_NOTIFY_GRANTED_EVER, false);
+    }
+
+    /** 升级迁移：1.1.3.15 之前「问过没问过」只在内存里，老用户升级后两个
+        持久化标记都是空。若什么都不做，他们第一次关掉权限再回来仍会被弹一次。
+        有登录态说明这不是全新安装，通知权限流程早就走过（1.1.3.4 起就有），
+        直接记为「已决定」，不再自动打扰。全新安装仍保留首次问一次的机会。
+        另外只要当前有权限就记下「曾授予过」，覆盖「从未走过我们对话框、
+        但权限一直是开的」这种情况。 */
+    private void migrateNotifyPermissionDecision() {
+        if (hasNotifyPermission()) markNotifyGrantedEver();
+        if (notifyPermissionDecided()) return;
+        boolean usedBefore = !cfg.optString("token", "").isEmpty()
+                || !cfg.optString("phone", "").isEmpty();
+        if (usedBefore) {
+            notifyPrefs().edit().putBoolean(PREF_NOTIFY_ASKED, true).apply();
         }
     }
 
@@ -430,7 +491,21 @@ public class MainActivity extends android.app.Activity {
     private String pendName;
     private String pendCode;
     private long pendExpireMs;
-    private boolean notifyAsked;
+
+    /* 通知权限的「用户决定」必须跨进程存活。1.1.3.15 前这里只有一个内存里的
+       boolean notifyAsked，而 AOSP 在撤销 POST_NOTIFICATIONS 时会
+       killUidForPermissionChange() 杀进程（见 12.7）：变量归零 → 用户刚在系统里
+       关掉通知，回到 App 立刻又被弹一次权限请求，正好违背 1.1.3.13 定的规矩。
+
+       两个持久化标记都存进原生 SharedPreferences（file:// 下 localStorage 不可靠）：
+         notifyPermAsked      —— 本应用已经向系统弹过一次权限对话框
+         notifyPermGrantedEver—— 权限曾经被授予过（说明用户后来是主动关掉的）
+       只要任一为真就不再自动弹。想开的人走「我的」页静态入口或系统设置。 */
+    private static final String PREF_NOTIFY_ASKED = "notifyPermAsked";
+    private static final String PREF_NOTIFY_GRANTED_EVER = "notifyPermGrantedEver";
+
+    /* 上次 onResume 看到的权限状态，用于识别「在系统设置里手动打开」这个变化 */
+    private boolean lastNotifyPerm;
 
     private void ensureCodeChannel() {
         android.app.NotificationManager nm =
@@ -466,13 +541,11 @@ public class MainActivity extends android.app.Activity {
             // 已经过期（或没算出有效时间）就不发，避免出现一个 0:00 的常驻通知
             if (left <= 0) { cancelOrderCode(); return; }
 
-            if (Build.VERSION.SDK_INT >= 33
-                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            if (!hasNotifyPermission()) {
                 pendName = name;
                 pendCode = c;
                 pendExpireMs = expireAtMs;
-                requestNotifyPermission();
+                requestNotifyPermission();   // 内部已按「用户决定」判过，不会反复弹
                 return;
             }
 
@@ -525,12 +598,19 @@ public class MainActivity extends android.app.Activity {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(NID_CODE, b.build());
+            /* 发成功就清掉挂起内容。否则用户取消预约后 pendCode 仍在，
+               日后在系统设置里开关一次权限，onResume 会把这个已取消的码复活。 */
+            pendName = null;
+            pendCode = null;
         } catch (Throwable ignored) {
             // 通知失败不能影响取码主流程
         }
     }
 
     private void cancelOrderCode() {
+        /* 取消预约 / 码为空 / 已过期时，挂起的补发内容一并作废 */
+        pendName = null;
+        pendCode = null;
         try {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -546,9 +626,7 @@ public class MainActivity extends android.app.Activity {
         try {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            boolean perm = Build.VERSION.SDK_INT < 33
-                    || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            boolean perm = hasNotifyPermission();
             boolean enabled = nm != null && nm.areNotificationsEnabled() && perm;
             boolean has = false;
             int imp = -1;
@@ -792,8 +870,14 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void requestNotifyPermission() {
-        if (Build.VERSION.SDK_INT < 33 || notifyAsked) return;
-        notifyAsked = true;
+        /* 只在「从未问过、且权限从未被授予过」时弹一次。
+           进程被系统 kill 重建后，内存标志会归零，所以判据必须落在原生持久化里。
+           用户明确拒绝过、或授予后又从系统设置关掉，都不再自动打扰——
+           这是 1.1.3.13「尊重用户关掉通知的决定」在原生侧的落实。
+           markNotifyAsked 必须在 requestPermissions 之前写：对话框弹出期间若被
+           系统杀进程，重建后也不会重复弹。 */
+        if (Build.VERSION.SDK_INT < 33 || notifyPermissionDecided()) return;
+        notifyPrefs().edit().putBoolean(PREF_NOTIFY_ASKED, true).apply();
         try {
             requestPermissions(
                     new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
@@ -806,8 +890,15 @@ public class MainActivity extends android.app.Activity {
         if (req != REQ_NOTIFY) return;
         boolean ok = results != null && results.length > 0
                 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        lastNotifyPerm = ok;
+        if (ok) markNotifyGrantedEver();
         if (ok && pendCode != null && !pendCode.isEmpty()) {
             notifyOrderCode(pendName, pendCode, pendExpireMs);
+        }
+        /* 对话框授权成功也强制刷一次：把首页提示框和「我的」页状态从
+           「未开启」更新成「已生效」，不用等用户手动下拉刷新。 */
+        if (ok && web != null) {
+            web.evaluateJavascript("(window.__onShow ? window.__onShow(true) : 0)", null);
         }
     }
 
