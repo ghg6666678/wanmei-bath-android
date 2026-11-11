@@ -673,7 +673,32 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 
 预约后把「验证码 + 浴室名」发到常驻通知，锁屏点亮即可看到，不必解锁找 App。
 
-为什么不接厂商「灵动岛」：OPPO 流体云、小米焦点通知、华为实况窗、vivo 原子岛都要求厂商 SDK + 开发者资质 + **签名证书白名单**，个人自签名包接不进去。系统常驻通知能达成同样效果。
+#### 「上岛」有三条路，我们走的是第三条
+
+| 路径 | 是否需要资质 | 是否可用 |
+| --- | --- | --- |
+| 厂商私有 SDK（OPPO 流体云 / 小米焦点通知 / 华为实况窗 / vivo 原子岛） | 要开发者资质 + **签名证书白名单** | ❌ 个人自签名包接不进去 |
+| Root Hook 修改系统 | 要 root | ❌ 与「不折腾用户设备」的原则冲突 |
+| **Android 16 原生 Live Updates（API 36）** | **都不要** | ✅ 本项目的做法 |
+
+第三条路的原理：应用按**标准**发一条「持续进行中」的通知，**由系统决定渲染成什么形态**。ROM 若兼容这套标准（ColorOS 16 起流体云已接入 Google 标准、HyperOS 超级岛被社区确认支持），系统会自动把它提升成岛/云/窗；不兼容就退化成普通常驻通知。所以不需要向任何厂商申请。
+
+> 早期版本曾断言「只有厂商白名单这条路」，那是错的——漏了这条官方标准通路。InstallerX-Revived 等开源项目走的正是它。
+
+#### 实现：编译期只到 SDK 34，所以全走反射
+
+本地构建链只有 `platform-34`，而 Live Updates 是 API 36，因此不新增编译依赖，改用反射 + 能力检测，任何一步失败都**安静退回普通通知**（安全失败）：
+
+| 用途 | API | 说明 |
+| --- | --- | --- |
+| 能力检测 | `NotificationManager.canPostPromotedNotifications()` | 本机是否支持被提升 |
+| 请求提升 | `FLAG_PROMOTED_ONGOING = 262144` + `Builder.setFlag(int, boolean)` | 常量值由 `platform-36` 的 `javap -constants` 读出后写死 |
+| 岛/芯片文案 | `Builder.setShortCriticalText(String)` | 直接放验证码 |
+| 进度形态 | `Notification$ProgressStyle.setProgress(int)` | 按当天剩余比例推进 |
+
+`notifyStatus()` 会返回 `live` 字段，界面据此说明「本机支持/不支持实时通知」。
+
+#### 其余实现要点
 
 | 需求 | 做法 |
 | --- | --- |

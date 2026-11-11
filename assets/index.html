@@ -858,7 +858,10 @@ function notifySetupHint() {
       ② 同一页 → 打开「<strong>锁屏显示通知</strong>」（默认常关）<br>
       ③ 子类别「<strong>验证码显示</strong>」→ 关掉「静默通知」<br>
       ④ 同一子类别 → 打开「锁屏显示」<br>
-      <span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span>
+      <span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span><br>
+      <span style="opacity:.75">${st && st.live
+        ? '本机支持实时通知，验证码会尝试显示到状态栏/岛上。'
+        : '本机暂不支持 Android 16 实时通知，按普通通知显示（锁屏仍可见）。'}</span>
       <div style="display:flex;gap:9px;margin-top:10px">
         <button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>
         <button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>
