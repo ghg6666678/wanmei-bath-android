@@ -409,6 +409,22 @@ input[type=tel]::placeholder{color:var(--ink3)}
       达到限时或限额设备会自动关阀；想继续用，在设备上重新输入同一个验证码即可再开（验证码当日有效）。
     </div>
 
+    <div class="sec-title"><h3>验证码显示</h3></div>
+    <section class="card">
+      <div class="setrow" id="rowNotify">
+        <div class="grow">
+          <div class="name">锁屏 / 状态栏显示</div>
+          <div class="info" id="notifyStateInfo">正在读取通知状态…</div>
+        </div>
+        <div class="val"><span id="notifyStateVal">—</span><i>›</i></div>
+      </div>
+    </section>
+    <div class="tipnote">
+      验证码会以<strong>明文</strong>显示在锁屏和状态栏，拿到手机的人也能看到。
+      不想这样，关掉应用级「允许通知」即可 —— 已实测：关掉后实时活动开关会一并隐藏、流体云消失，
+      验证码仍可在 App 内查看。这条开关由系统保存，App 不会替你改，也不会反复提醒你打开。
+    </div>
+
     <div class="sec-title"><h3>账号</h3></div>
     <section class="card">
       <div class="rec"><span>姓名</span><span class="r" id="meName">—</span></div>
@@ -856,14 +872,19 @@ function notifySetupHint() {
   const apiPresent = ['yes', 'no', 'bad_ret'].indexOf(liveWhy) >= 0;
   const liveCapable = Number(st && st.sdk) >= 36 && apiPresent;
   const working = !!(d && d.flagged);
-  /* 权限被明确拒掉、或开关明确没开，属于硬错误，点过「知道了」也继续提示 */
-  const switchOff = !!(d && d.found && d.chars && !d.flagged && d.canPost === 'no');
-  const hard = !!(st && st.perm === false) || switchOff;
-  if (dismissed && !hard) return '';
+  /* 1.1.3.13：用户关掉通知权限是一个【决定】，不是「还没配置好」。
+     真机实测（ColorOS / Android 16）：关掉应用级「允许通知」后，
+     下面「流体云显示实时活动」等子项会一并隐藏，流体云本身也消失。
+     这条总闸就是本功能唯一彻底、语义无歧义的退出方式。
+
+     所以不再把 perm=false / 实时活动开关没开算成「硬错误」反复催，
+     也不再显示「请打开允许通知」这类劝说的话：点过「知道了」就彻底安静，
+     权限已关时连提示框都不出现。想改回来的路放在「我的」页的静态状态行，
+     由用户自己点进去，不靠弹窗推。 */
+  const optedOut = !!(st && (st.perm === false || st.enabled === false));
+  if (dismissed || optedOut) return '';
   if (working) return '';   /* 已经上岛，没有任何需要用户再设置的东西 */
 
-  const permLine = (st && st.perm === false)
-    ? '<br>另外通知权限还没给，请在同一页一并打开「允许通知」。' : '';
   const buttons = '<div style="display:flex;gap:7px;margin-top:10px">'
     + '<button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>'
     + '<button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>'
@@ -892,10 +913,12 @@ function notifySetupHint() {
       : '';
     return openBox
       + '<strong>打开「流体云显示实时活动」开关</strong><br>'
-      + '实时活动会以流体云显示，<strong>不受通知设置的影响</strong>，只要开这一个开关就够了。<br>'
+      + '实时活动会以流体云显示，<strong>不受锁屏通知等细项设置的影响</strong>，开这一个开关就够了。<br>'
       + '在「应用通知」页「允许通知」下方找到 <strong>流体云显示实时活动</strong>'
-      + '（澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。'
-      + permLine + '<br>'
+      + '（澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。<br>'
+      + '<span style="opacity:.9">验证码会<strong>明文</strong>显示在锁屏上。不想让别人看到，'
+      + '关掉应用级「允许通知」即可（已实测：关掉后这个开关与流体云都会消失），'
+      + '验证码仍可在 App 内查看。</span><br>'
       + '<span style="opacity:.85">' + state + '</span><br>'
       + diagLine + buttons + '</div>';
   }
@@ -914,6 +937,8 @@ function notifySetupHint() {
     + '④ 同一子类别 → 打开「锁屏显示」<br>'
     + '<span style="opacity:.75">②没打开时 ③④ 会隐藏，先开 ② 再往下点。</span><br>'
     + '<span style="opacity:.6;font-size:.92em">本机未提供实时活动接口，按上面设置锁屏通知即可。</span><br>'
+    + '<span style="opacity:.9">验证码会明文显示在锁屏上；不想让别人看到，关掉「允许通知」即可，'
+    + '验证码仍可在 App 内查看。</span><br>'
     + buttons + '</div>';
 }
 
@@ -923,8 +948,9 @@ function notifySetupHint() {
    1.1.3.11 起不再用 chronometer 渲染倒计时——那串 HH:MM:SS 没有意义。
 
    没有预约时（含取消后）要主动清掉，否则会留一条过期的码在锁屏上。
-   顺带一提：码会明文显示在锁屏上，室友拿到手机也能看到——不过开阀还得
-   人站到浴室设备前输入，风险有限。 */
+   1.1.3.13：码会明文显示在锁屏上这件事，现在写在「我的」页「验证码显示」
+   分区和首次提示框里（用户看得见），不再只留在这段注释里；也不再由代码
+   替用户下风险结论。不想显示就关掉应用级「允许通知」，实测有效。 */
 function syncLockScreenCode() {
   const nat = __native();
   if (!nat) return;                       /* 浏览器里没有原生桥，直接跳过 */
@@ -1146,6 +1172,34 @@ $('#btnStarDorm').onclick = () => {
     }, 2);
 };
 
+/* 「我的」页里的静态状态：不弹窗、不催促，只在用户主动点进这一页时说明
+   当前状态、以及想改回去该去哪。关掉总闸后系统里所有子项都会隐藏、提示框
+   也不再出现，App 内只剩这一条路能找回来，所以这里必须常驻。
+   复用 notifyStatus() / openNotifySettings()，不新增原生桥。 */
+function renderNotifyState() {
+  const val = $('#notifyStateVal'), info = $('#notifyStateInfo');
+  if (!val || !info) return;
+  const nat = __native();
+  if (!nat || !nat.notifyStatus) {
+    val.textContent = '—';
+    info.textContent = '浏览器版没有锁屏通知，验证码只在页面内显示。';
+    return;
+  }
+  let st = null;
+  try { st = JSON.parse(String(nat.notifyStatus() || '{}')); } catch (e) { }
+  const d = st && st.diag ? st.diag : null;
+  if (st && (st.perm === false || st.enabled === false)) {
+    val.textContent = '已关闭';
+    info.textContent = '应用通知已关闭，锁屏不会显示；点这里可改回来。';
+  } else if (d && d.flagged) {
+    val.textContent = '已生效';
+    info.textContent = '验证码正以流体云显示在锁屏 / 状态栏。';
+  } else {
+    val.textContent = '未开启';
+    info.textContent = '如需在锁屏显示，点这里打开「允许通知」与实时活动开关。';
+  }
+}
+
 function renderMe() {
   const pe = $('#mePhone');
   if (pe) pe.textContent = state.cfg.phone || '—';
@@ -1162,6 +1216,7 @@ function renderMe() {
   const upd = state.update && state.update.latest;
   $('#updRowInfo').textContent = '当前版本 ' + ver +
     (upd && upd.version && verCmp(upd.version, ver) > 0 ? ' · 有新版本 ' + upd.version : '');
+  renderNotifyState();
 }
 
 function escapeHtml(s) {
@@ -1802,6 +1857,13 @@ $('#rowFare').onclick = () => {
   if (!state.settings || !state.settings.max_fare_limit) return toast('还没加载到当前设置', true);
   openLimit('fare', state.settings.max_fare_limit,
     v => saveSettings(state.settings.max_time_limit || 30, v));
+};
+
+/* 「我的」页的静态入口：停在应用级通知页（母类），实时活动开关就在
+   「允许通知」下方；关掉母类时子项会被系统隐藏，所以不能直达子类别。 */
+$('#rowNotify').onclick = () => {
+  const nat = __native();
+  if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
 };
 
 /* ---------- 充值说明弹层：只给指引并打开微信，不处理支付 ---------- */
