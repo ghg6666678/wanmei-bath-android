@@ -343,7 +343,11 @@ input[type=tel]::placeholder{color:var(--ink3)}
 .updnotes{font-size:12.5px;line-height:1.75;color:var(--ink2);margin-top:12px;
   padding:12px 13px;border-radius:12px;background:rgba(16,24,40,.04);
   /* 日志改成完整显示后内容会变长，这里限高滚动，弹层本身不被撑爆 */
-  max-height:30vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  max-height:30vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  /* 修横滑偏移：overflow-y 设成 auto 后 overflow-x 也会跟着变成可滚动（CSS 两轴
+     不能一个 auto 一个 visible），GitHub 日志里反引号包的 SHA-256（64 个不换行字符）
+     把盒子撑宽，整个日志块就能左右滑。横向锁死，超长内容一律换行处理。 */
+  overflow-x:hidden;overflow-wrap:anywhere;word-break:break-word}
 /* Markdown 渲染出来的元素样式 */
 .updnotes h2,.updnotes h3,.updnotes h4{color:var(--ink);font-weight:700;margin:14px 0 6px}
 .updnotes h2{font-size:14.5px}
@@ -354,14 +358,16 @@ input[type=tel]::placeholder{color:var(--ink3)}
 .updnotes ul,.updnotes ol{margin:0 0 9px;padding-left:19px}
 .updnotes li{margin:3px 0}
 .updnotes code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;
-  background:var(--code-bg);padding:1.5px 5px;border-radius:5px}
-.updnotes pre{background:var(--code-bg);padding:10px 12px;border-radius:10px;overflow-x:auto;
-  font-size:11.5px;line-height:1.6;margin:0 0 9px;border:1px solid var(--line)}
+  background:var(--code-bg);padding:1.5px 5px;border-radius:5px;overflow-wrap:anywhere}
+.updnotes pre{background:var(--code-bg);padding:10px 12px;border-radius:10px;
+  font-size:11.5px;line-height:1.6;margin:0 0 9px;border:1px solid var(--line);
+  white-space:pre-wrap;overflow-wrap:anywhere}
 .updnotes pre code{background:none;padding:0;font-size:11.5px}
 .updnotes table{border-collapse:collapse;width:100%;font-size:12px;margin:0 0 10px;
-  display:block;overflow-x:auto}
+  table-layout:fixed}
+.updnotes th,.updnotes td{overflow-wrap:anywhere}
 .updnotes th,.updnotes td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
-.updnotes th{background:var(--code-bg);font-weight:700;color:var(--ink);white-space:nowrap}
+.updnotes th{background:var(--code-bg);font-weight:700;color:var(--ink)}
 .updnotes blockquote{margin:0 0 9px;padding:7px 11px;border-left:3px solid var(--brand);
   background:rgba(37,99,235,.07);color:var(--ink2)}
 .updnotes a{color:var(--brand);text-decoration:none;word-break:break-all}
@@ -725,7 +731,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.4.6 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.4.7 及以后</strong></p>
     <p>本政策说明「洗澡助手」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>

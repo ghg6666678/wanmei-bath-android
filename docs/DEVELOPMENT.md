@@ -670,6 +670,7 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | **1.1.4** | `zhishui-1.1.4.apk` | 103,315 B | **54** |
 | **1.1.4.5** | `zhishui-1.1.4.5.apk` | 103,315 B | **55** |
 | **1.1.4.6** | `zhishui-1.1.4.6.apk` | 103,315 B | **56** |
+| **1.1.4.7** | `zhishui-1.1.4.7.apk` | 107,411 B | **57** |
 
 早期四个版本的 Release 已发布并附带 APK 与发布说明；两个仓库的 `main` 与版本标签一致。README 里另有「适用范围与其他学校」章节，仓库配有 issue 模板用于收集跨校适配反馈。
 
@@ -1515,6 +1516,44 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 - **官网不支持 Range**：探测发 `Range: bytes=0-0` 仍回 200 全量。`probeUrl()` 拿到响应码就 `disconnect()`，不会真把 104 KB 读完，代价可以忽略；但如果以后包涨到几十 MB，这条源的探测会变贵，届时应在服务端开 Range。
 
 **版本 1.1.4.6 / versionCode 56**，已发布（Release + 官网同步）。
+
+### 12.26 修更新日志横滑、清单来源加上官网（1.1.4.7）
+
+#### 横滑这个 bug 的成因
+
+更新弹层里的日志盒子是「限高 + 纵向滚动」：
+
+```css
+.updnotes{max-height:30vh;overflow-y:auto;...}
+```
+
+看起来只控制了纵轴，但 **CSS 规定两个轴不能一个 `auto` 一个 `visible`**：一旦 `overflow-y` 不是 `visible`，`overflow-x` 的 `visible` 会被计算成 `auto`。于是这个盒子横向也可滚。
+
+触发器是 GitHub 来源的日志正文——Release 说明里有反引号包的 SHA-256（64 个十六进制字符），`<code>` 默认不换行，单这一串就比手机屏还宽，把盒子撑到 440px，比内容区 309px 多出 **131px**。手指一划，整块日志跟着偏移，看起来像"页面歪了"。
+
+修法是三层一起改，缺一层都还会露出来：
+
+| 层 | 改动 |
+| --- | --- |
+| 外层盒子 | `overflow-x:hidden` + `overflow-wrap:anywhere`，横轴彻底锁死 |
+| 行内 code | `overflow-wrap:anywhere`——哈希、长 URL 可以在任意字符处断行 |
+| `pre` / `table` | 去掉 `overflow-x:auto`，改 `white-space:pre-wrap` 与 `table-layout:fixed`；`th` 不再 `nowrap` |
+
+**验证**：360px 宽（iframe 精确模拟，headless 的 `--window-size` 实际不生效，会固定成 492px）下，同样内容旧样式 `scrollWidth=440 / clientWidth=309`（溢出 131px），新样式 `309 / 309`（溢出 0）。
+
+#### 清单来源加上官网
+
+原来版本清单只有四个网络源：GitHub API、jsDelivr 主节点、gcore、raw——**全部挂在 GitHub 生态上**。国内 api.github.com 被挡的时候，这四个会一起失败，用户看到的是"连不上 GitHub"，明明有网却更新不了。
+
+`SITE_BASE/latest.json` 现在排第一个探测。三点注意：
+
+1. **清单文件必须放进 `site/` 并随站点发布**——一开始只改了 Java，官网目录里根本没有 `latest.json`，那条源直接 404。这是新的一条**发版同步点**：根 `latest.json`、`assets/latest.json`、`site/latest.json` 三份要一致。
+2. 官网按分享码控制访问，URL 必须带 `?sharecode=`；不带拿到的是 403 的 HTML，`JSONObject` 解析失败会自动跳到下一个源，不会崩。
+3. 版本相同时并列取 GitHub API（`c == 0 && s.kind == KIND_API`），所以两边都通时仍以官方接口为准；**官网是兜底，不是替代**。
+
+顺带确认：`apkUrl` 不在清单里也没关系，`withDownload()` 会按 `version` + `apkName` 拼出 GitHub Release 直链。
+
+**版本 1.1.4.7 / versionCode 57**。
 
 ## 13. 小结
 

@@ -71,6 +71,19 @@ public class Update {
      * 长达 12 小时的解析缓存，刚发版时 {@code @main} 可能仍指向旧提交（表现为 404 或
      * 返回上一版的文件），而每个版本的 tag 都是全新引用，没有缓存，立刻可用。
      */
+    /**
+     * 本项目官网（WorkBuddy 托管）。两个用途：版本清单的来源之一，以及安装包的下载源。
+     *
+     * <p>为什么需要它：GitHub 系在国内的可达性完全看运气——api.github.com 被墙时，
+     * 下面的三个清单源会**一起**失败，用户就只能看到「连不上 GitHub」，明明有网也更新不了。
+     * 官网是同一个作者控制、且国内通常能直接打开的地址，把它加进清单来源就补上了这个洞。
+     *
+     * <p>站点用分享码控制访问，所以链接必须带 {@code ?sharecode=}；不带会拿到 403 页面
+     * （不是 JSON，解析会失败并自动跳到下一个源，不会崩）。
+     */
+    private static final String SITE_BASE = "https://zhishui-site.app.workbuddy.host";
+    private static final String SITE_CODE = "KLDDLXOQRD";
+
     private static final String[] CDNS = {
             "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
             "https://gcore.jsdelivr.net/gh/%s@v%s/release/%s",
@@ -112,6 +125,10 @@ public class Update {
 
         // ---- 网络层：并行探测 ----
         List<Source> probes = new ArrayList<>();
+        /* 官网排第一：国内可达性最好，而且不依赖任何第三方。它读的是我们自己发布的
+           latest.json，字段与 jsDelivr 那几条完全一致。 */
+        probes.add(new Source(KIND_MANIFEST, "官网清单",
+                SITE_BASE + "/latest.json?sharecode=" + SITE_CODE));
         probes.add(new Source(KIND_API, "GitHub 官方接口",
                 "https://api.github.com/repos/" + REPO + "/releases/latest"));
         // 曾经这里有一条 ghproxy.cn 的镜像通道，2026-11 因该域名跳转色情站点已删除。

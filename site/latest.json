@@ -1,0 +1,13 @@
+{
+  "version": "1.1.4.7",
+  "versionCode": 57,
+  "publishedAt": "2026-11-12T15:35:00Z",
+  "notes": "修复：检查更新里的更新日志可以向左滑动造成偏移——日志块限高滚动时横轴也被设成了可滚动，哈希这类不换行的长串把它撑宽了；现在横向锁死，长内容一律换行\n检查更新新增「官网清单」来源：GitHub 接口与三个 CDN 都连不上时，仍可从本项目官网读到版本信息，不再只能卡在「连不上 GitHub」\n其余改动与 1.1.4.6 相同",
+  "apkName": "zhishui-1.1.4.7.apk",
+  "mirrors": [
+    "https://zhishui-site.app.workbuddy.host/zhishui-1.1.4.7.apk?sharecode=KLDDLXOQRD",
+    "https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.7/release/zhishui-1.1.4.7.apk",
+    "https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.7/release/zhishui-1.1.4.7.apk"
+  ]
+}
+
