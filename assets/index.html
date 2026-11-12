@@ -94,6 +94,19 @@ main{padding:4px 16px 8px;display:flex;flex-direction:column;gap:14px}
    横排时不同设备字体放大会把标签和倒计时挤折行，所以改成竖排并给数字自适应大字号。 */
 #orderCard .code{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:7px;margin-top:14px;padding:16px 12px;text-align:center}
+/* 多预约：验证码区横向翻页。每页一个码、一段各自的使用提示。
+   用原生横向滚动 + scroll-snap，不引第三方手势库：WebView 自带惯性，手指手感更接近系统。 */
+.codewrap{position:relative;margin-top:14px}   /* 补回原 .code 的上边距，单条预约的间距才不变 */
+.codestrip{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
+.codestrip::-webkit-scrollbar{display:none}
+.copage{flex:0 0 100%;min-width:0;scroll-snap-align:center}
+#orderCard .copage .code{margin-top:0}
+.codedots{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.codedots i{width:6px;height:6px;border-radius:50%;background:var(--line);
+  transition:width .18s,background .18s}
+.codedots i.on{width:16px;border-radius:3px;background:var(--brand)}
+.codeswipe{text-align:center;font-size:11px;color:var(--ink3);margin-top:5px}
 #orderCard .code .k{font-size:12px;letter-spacing:2px;color:var(--ink2);white-space:nowrap}
 #orderCard .code .v{font-size:clamp(32px,10.5vw,42px);line-height:1.08;font-weight:800;
   letter-spacing:6px;font-variant-numeric:tabular-nums;color:var(--brand);white-space:nowrap}
@@ -817,7 +830,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <script>
 const $ = s => document.querySelector(s);
 const state = {orders: [], rooms: [], cfg: {}, settings: {}, balance: null, serverOffset: 0,
-               serverCalibrated: false, pickedRoom: null};
+               serverCalibrated: false, pickedRoom: null, orderSel: 0};
 
 function toast(msg, err) {
   const t = $('#toast');
@@ -988,43 +1001,103 @@ function renderOrder() {
   if (!state.orders.length) {
     card.classList.add('hidden');
     card.innerHTML = '';
+    state.orderSel = 0;
     syncLockScreenCode();
     return;
   }
   /* 后台刷新不能在「我的」/「记录」页把验证码卡片翻出来 */
   card.classList.toggle('hidden', !onHomeTab());
   card.style.padding = '0';
-  card.innerHTML = state.orders.map((o, i) => {
-    const fare = (Number(o.max_fare_limit || 0) / 100).toFixed(2).replace(/\.00$/, '');
-    return `
-    <div class="orderitem" style="${i ? 'border-top:1px solid var(--line)' : ''};padding:16px">
+
+  const n = state.orders.length;
+  if (!(state.orderSel >= 0 && state.orderSel < n)) state.orderSel = 0;
+  const sel = state.orderSel;
+  const cur = state.orders[sel];
+  const fareOf = (o) => (Number(o.max_fare_limit || 0) / 100).toFixed(2).replace(/\.00$/, '');
+
+  /* 每个预约一页：码 + 倒计时 + 使用提示。提示跟着各自的码走，
+     以前只有第一条带提示，滑到第二条就只剩一串数字。 */
+  const pages = state.orders.map((o, i) => `
+      <div class="copage" data-i="${i}">
+        <div class="code">
+          <span class="k">验证码</span>
+          <span class="v">${o.verificationcode || '------'}</span>
+          <span class="countdown" data-cd="${i}"></span>
+        </div>
+        <div class="tipnote" style="margin-top:11px">
+          到浴室设备上按任意键 → 输入验证码 → 按“确认”即可开阀。<br>
+          限时和限额都从<strong>开阀那一刻</strong>开始累计；用完后重新输入同一个验证码可以再开。
+        </div>
+      </div>`).join('');
+
+  card.innerHTML = `
+    <div class="orderitem" style="padding:16px">
       <div class="top">
         <div style="min-width:0">
-          <h2>${o.bathroomname || '已预约'}</h2>
+          <h2 id="ordName">${cur.bathroomname || '已预约'}</h2>
           <div class="meta">
-            <span>预约时间 ${o.orderdatetime || ''}</span>
-            <span>限时 ${o.max_time_limit || 30} 分钟 · 限额 ${fare} 元</span>
+            <span id="ordWhen">预约时间 ${cur.orderdatetime || ''}</span>
+            <span id="ordLimit">限时 ${cur.max_time_limit || 30} 分钟 · 限额 ${fareOf(cur)} 元</span>
           </div>
         </div>
         <span class="pill">当日有效</span>
       </div>
-      <div class="code">
-        <span class="k">验证码</span>
-        <span class="v">${o.verificationcode || '------'}</span>
-        <span class="countdown" data-cd="${i}"></span>
+      <div class="codewrap">
+        <div class="codestrip" id="codeStrip">${pages}</div>
+        ${n > 1 ? `<div class="codedots" id="codeDots">${state.orders.map((_, i) =>
+            `<i class="${i === sel ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="codeswipe">左右滑动切换 · <span id="codePos">${sel + 1}/${n}</span></div>` : ''}
       </div>
-      ${i === 0 ? `<div class="tipnote" style="margin-top:11px">
-        到浴室设备上按任意键 → 输入验证码 → 按“确认”即可开阀。<br>
-        限时和限额都从<strong>开阀那一刻</strong>开始累计；用完后重新输入同一个验证码可以再开。
-      </div>` : ''}
       <div style="display:flex;gap:9px;margin-top:13px">
-        <button class="btn ghost sm" style="flex:1" data-cancel="${o.orderno}" data-name="${o.bathroomname || ''}">取消预约</button>
+        <button class="btn ghost sm" style="flex:1" id="ordCancel">取消预约</button>
       </div>
-    </div>`;
-  }).join('');
-  card.querySelectorAll('button[data-cancel]').forEach(b => {
-    b.onclick = () => cancelOrder(b.dataset.cancel, b.dataset.name);
-  });
+    </div>`
+
+  /* 取消按钮绑定「当前看到的那一条」，避免看着 A 却取消了 B */
+  const cancelBtn = $('#ordCancel');
+  const bindCancel = () => {
+    const o = state.orders[state.orderSel] || state.orders[0];
+    cancelBtn.onclick = () => cancelOrder(o.orderno, o.bathroomname || '');
+  };
+  bindCancel();
+
+  /* 多预约：横向滚动 + 吸附。滑到哪条，标题、倒计时、取消按钮、锁屏通知都跟着换 */
+  const strip = $('#codeStrip');
+  if (strip && n > 1) {
+    const applySel = (i) => {
+      if (i === state.orderSel) return;
+      state.orderSel = i;
+      const o = state.orders[i];
+      $('#ordName').textContent = o.bathroomname || '已预约';
+      $('#ordWhen').textContent = '预约时间 ' + (o.orderdatetime || '');
+      $('#ordLimit').textContent = `限时 ${o.max_time_limit || 30} 分钟 · 限额 ${fareOf(o)} 元`;
+      card.querySelectorAll('#codeDots i').forEach((d, k) => d.classList.toggle('on', k === i));
+      const pos = $('#codePos');
+      if (pos) pos.textContent = (i + 1) + '/' + n;
+      bindCancel();
+      syncLockScreenCode();   /* 通知跟着当前这一条走，锁屏看到的和眼前的一致 */
+    };
+    /* 判定当前停在哪一页。滚动会连续触发几十次，所以 onscroll 走 80ms 去抖；
+       有 scrollend 的浏览器再挂一份，手指停下立刻对齐（去抖是兜底，不是替代）。 */
+    const checkPos = () => {
+      const w = Math.max(1, strip.clientWidth);
+      const i = Math.round(strip.scrollLeft / w);
+      if (i !== state.orderSel && i >= 0 && i < n) applySel(i);
+    };
+    let sTmr = 0;
+    strip.onscroll = () => {
+      clearTimeout(sTmr);
+      sTmr = setTimeout(checkPos, 80);
+    };
+    if ('onscrollend' in window) strip.addEventListener('scrollend', checkPos);
+    /* 重建 DOM 后停在上次看的那一条；否则每 30 秒刷新一次就跳回第一个。
+       不能放在 0ms：那时刚插进 DOM、布局还没算出宽度，赋值会被丢掉。 */
+    setTimeout(() => {
+      if (strip.scrollWidth <= strip.clientWidth) return;
+      strip.scrollLeft = sel * strip.clientWidth;
+    }, 60);
+  }
+
   startCountdown();
   syncLockScreenCode();
   /* 通知发出去之后再判断要不要提示设置——通道是在发通知时才创建的，
@@ -1169,7 +1242,10 @@ function notifyStateNow() {
 function syncLockScreenCode() {
   const nat = __native();
   if (!nat) return;                       /* 浏览器里没有原生桥，直接跳过 */
-  const o = (state.orders || [])[0];
+  /* 多预约时以「当前翻到的那一条」为准：锁屏上显示的应该和用户眼前的一致，
+     否则滑到第二条、锁屏还是第一条，容易照着错的码去输。 */
+  const list = state.orders || [];
+  const o = list[state.orderSel] || list[0];
   const code = o && o.verificationcode ? String(o.verificationcode).trim() : '';
   try {
     if (!code) {
@@ -1191,7 +1267,7 @@ function syncLockScreenCode() {
     }
     /* 传绝对失效时刻（已按服务端校准），原生侧用它渲染倒计时并定时消失。
        多个预约时以第一个为主，标题里带上总数，免得用户以为只有这一个。 */
-    const more = state.orders.length > 1 ? ` · 共 ${state.orders.length} 个` : '';
+    const more = list.length > 1 ? ` · 共 ${list.length} 个` : '';
     nat.showOrderCode((o.bathroomname || '已预约') + more, code,
                       verifyExpireAt().getTime());
   } catch (e) { /* 通知失败不影响取码 */ }
