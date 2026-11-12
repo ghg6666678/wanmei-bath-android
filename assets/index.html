@@ -362,14 +362,12 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <header>
   <div class="brand">
-    <!-- 二级页（设置）的返回键：进设置时替换掉 logo，标题写「设置」。
-         放在 sticky 的 header 里，页面滚到多深都能退回来。 -->
+    <!-- 二级页（设置）的返回键：进设置时替换掉 logo，标题写「设置」。放在 sticky 的 header 里，页面滚到多深都能退回来。 -->
     <button class="hback" id="hBack" aria-label="返回">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
            stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
-    <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，
-         不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
+    <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
     <div class="logo" id="hLogo">
       <svg viewBox="0 0 108 108" width="26" height="26" aria-hidden="true">
         <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
@@ -417,8 +415,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <section class="card" id="recList"><div class="empty">加载中…</div></section>
   </div>
 
-  <!-- 我的：只回答两个问题——「我是谁」和「去哪设置」。
-       消费限制 / 余额提醒 / 验证码显示 / 应用 全部挪进二级页 #pageSet（1.1.3.20）。 -->
+  <!-- 我的：只回答两个问题——「我是谁」和「去哪设置」。消费限制 / 余额提醒 / 验证码显示 / 应用 全部挪进二级页 #pageSet（1.1.3.20）。 -->
   <div id="pageMe" class="hidden">
     <div class="sec-title"><h3>账号</h3></div>
     <section class="card">
@@ -442,8 +439,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     </section>
   </div>
 
-  <!-- 设置（二级页）：从「我的」进入。顶栏自动换成返回键 + 标题「设置」，
-       所以这里不再自带页面标题，避免和顶栏重复。 -->
+  <!-- 设置（二级页）：从「我的」进入。顶栏自动换成返回键 + 标题「设置」，所以这里不再自带页面标题，避免和顶栏重复。 -->
   <div id="pageSet" class="hidden">
     <div class="sec-title"><h3>消费限制</h3></div>
     <section class="card">
@@ -572,13 +568,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
   <div class="bar-h"></div>
   <h3>第一次用？先绑一下校园卡</h3>
   <div class="hint">
-    这个 App 直接对接接口，不需要原版 App。但<strong>账号得先在官方那边绑好校园卡</strong>，
-    否则登录后会提示缺少信息，用不了。
+    这个 App 直接对接接口，不需要原版 App。但<strong>账号得先在官方那边绑好校园卡</strong>，否则登录后会提示缺少信息，用不了。
     <br><br>
-    绑定方式与密码规则<strong>以学校通知为准</strong>：据我所知，各校流程不一样——有的能
-    直接在「完美校园」小程序里绑，有的需要先到信息化处重置密码，<strong>肯定还有其他情况</strong>
-    （不同年级、不同批次的流程都可能不同）。小程序只能绑卡、没有「智慧用水」，
-    绑完回本应用登录即可。
+    绑定方式与密码规则<strong>以学校通知为准</strong>：据我所知，各校流程不一样——有的能直接在「完美校园」小程序里绑，有的需要先到信息化处重置密码，<strong>肯定还有其他情况</strong>（不同年级、不同批次的流程都可能不同）。小程序只能绑卡、没有「智慧用水」，绑完回本应用登录即可。
   </div>
   <div style="display:flex;gap:9px;margin-top:16px">
     <button class="btn ghost" style="flex:1;padding:14px" id="guideWx">打开微信</button>
@@ -663,21 +655,14 @@ input[type=tel]::placeholder{color:var(--ink3)}
 </div>
 
 <!-- 检查更新 -->
-<!-- 申请通知权限之前的前置告知（1.1.3.30）：
-     以前是 JS 直接把码交给原生，原生发现没权限就弹系统框——用户还不知道
-     这条通知会把明文验证码送到锁屏和息屏上。现在没权限时先讲清楚，由用户
-     决定要不要申请；不给权限不影响取码。 -->
+<!-- 申请通知权限之前的前置告知（1.1.3.30）：以前是 JS 直接把码交给原生，原生发现没权限就弹系统框——用户还不知道这条通知会把明文验证码送到锁屏和息屏上。现在没权限时先讲清楚，由用户决定要不要申请；不给权限不影响取码。 -->
 <div class="sheet" id="notifyPermAsk">
   <div class="bar-h"></div>
   <h3>先说明：验证码会显示在锁屏和息屏上</h3>
   <div class="hint" style="line-height:1.85;font-size:13px">
-    下一步会申请「通知」权限。开启后，取码成功时会发一条常驻通知，内容包含
-    <span class="warn-red">明文验证码</span>，并请求系统把它提升为“灵动岛”。
-    提升后它可能出现在<span class="warn-red">状态栏胶囊</span>、<span class="warn-red">锁屏</span>
-    和<span class="warn-red">息屏显示</span>上——手机放在桌上、没有解锁，旁边的人也可能看到。
+    下一步会申请「通知」权限。开启后，取码成功时会发一条常驻通知，内容包含<span class="warn-red">明文验证码</span>，并请求系统把它提升为“灵动岛”。提升后它可能出现在<span class="warn-red">状态栏胶囊</span>、<span class="warn-red">锁屏</span>和<span class="warn-red">息屏显示</span>上——手机放在桌上、没有解锁，旁边的人也可能看到。
     <br><br>
-    不想这样也没关系：<strong>不给通知权限不影响取码</strong>，验证码在 App 内照常查看。
-    以后想开，在系统设置 → 通知 → 本应用里打开即可。
+    不想这样也没关系：<strong>不给通知权限不影响取码</strong>，验证码在 App 内照常查看。以后想开，在系统设置 → 通知 → 本应用里打开即可。
   </div>
   <div style="display:flex;gap:9px;margin-top:14px">
     <button class="btn ghost" style="flex:1" id="nrpSkip">暂不开启</button>
@@ -685,18 +670,14 @@ input[type=tel]::placeholder{color:var(--ink3)}
   </div>
 </div>
 
-<!-- 一次性的场景告知（1.1.3.26）：通用免责声明在启动时同意，但「验证码
-     马上要上锁屏」这件事在它真正发生的那一刻说，才有意义。 -->
+<!-- 一次性的场景告知（1.1.3.26）：通用免责声明在启动时同意，但「验证码马上要上锁屏」这件事在它真正发生的那一刻说，才有意义。 -->
 <div class="sheet" id="notifyRisk">
   <div class="bar-h"></div>
   <h3>验证码会显示在锁屏和息屏上</h3>
   <div class="hint" style="line-height:1.85;font-size:13px">
-    取码成功后，应用会发一条常驻通知，内容包含<strong>明文验证码</strong>，
-    并请求系统把它提升为“灵动岛”。提升后它不只在锁屏出现，还可能显示在
-    <strong>状态栏胶囊和息屏显示</strong>上——手机放在桌上、没解锁也能被看到。
+    取码成功后，应用会发一条常驻通知，内容包含<strong>明文验证码</strong>，并请求系统把它提升为“灵动岛”。提升后它不只在锁屏出现，还可能显示在<strong>状态栏胶囊和息屏显示</strong>上——手机放在桌上、没解锁也能被看到。
     <br><br>
-    不想这样：关掉「实时活动」只会退回普通通知（通知栏里仍有码）；
-    要<strong>彻底不显示</strong>，得关掉「允许通知」。
+    不想这样：关掉「实时活动」只会退回普通通知（通知栏里仍有码）；要<strong>彻底不显示</strong>，得关掉「允许通知」。
     <br><br>
     <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见<a href="javascript:void(0)" class="policy-link" onclick="openPolicy('验证码明文显示')">隐私政策第 9 条</a>。</span>
   </div>
@@ -706,9 +687,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
   </div>
 </div>
 
-<!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份
-     文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。
-     与「明文通知」有关的关键词用 .warn-red 标红。 -->
+<!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
   <div class="policy">
     <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.3.x 及以后</strong></p>
@@ -774,8 +753,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
   </div>
 </template>
 
-<!-- 首次启动的隐私政策（1.1.3.27，原免责声明）：锁定弹层，读完才能同意。
-     不读完就点不动「同意并继续」——目的是让「已阅读」不是一句空话。 -->
+<!-- 首次启动的隐私政策（1.1.3.27，原免责声明）：锁定弹层，读完才能同意。不读完就点不动「同意并继续」——目的是让「已阅读」不是一句空话。 -->
 <div class="sheet" id="discFirst">
   <div class="bar-h"></div>
   <h3>隐私政策</h3>
