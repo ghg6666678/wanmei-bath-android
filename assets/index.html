@@ -359,7 +359,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，
          不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
     <div class="logo" id="hLogo">
-      <svg viewBox="0 0 108 108" width="21" height="21" aria-hidden="true">
+      <svg viewBox="0 0 108 108" width="26" height="26" aria-hidden="true">
         <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
         <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
       </svg>
@@ -971,7 +971,8 @@ function notifySetupHint() {
       + '在「应用通知」页「允许通知」下方找到它（ColorOS 叫 <strong>流体云显示实时活动</strong>，'
       + '澎湃 OS 4 叫 <strong>实时动态</strong>）并打开。<br>'
       + '<span style="opacity:.9">验证码会<strong>明文</strong>显示在锁屏上。'
-      + '不想显示，关掉「允许通知」或「实时活动」开关即可。</span><br>'
+      + '不想让锁屏出现验证码，可在系统通知设置里关掉本应用的「锁屏」；'
+      + '想连通知栏也不显示，再关掉「允许通知」。</span><br>'
       + '<span style="opacity:.85">' + state + '</span><br>'
       + diagLine + buttons + '</div>';
   }
@@ -1338,6 +1339,9 @@ function renderCodeWarn(st, d) {
     if (lock && lock.canRead && lock.secure === false) {
       out.push('另外，本机还没设置锁屏密码，任何人都能解锁后看到通知。');
     }
+    /* 给出可操作的那一步：用户实测「锁屏隐藏内容」只会剩下『1 条通知』，
+       对这种要读码的场景没什么用，所以更实际的选择是干脆关掉锁屏显示。 */
+    out.push('不想让锁屏出现验证码：在系统设置 → 通知 → 本应用里关掉「锁屏」开关。');
   }
   box.innerHTML = out.join('<br>');
 }

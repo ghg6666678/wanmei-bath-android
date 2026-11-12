@@ -5,14 +5,26 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 水滴主体 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z" />
+    <!-- 自适应图标的可见区是中间 72×72（18~90），超出部分会被系统裁掉。
+         原来水滴高 68（20~88），占可见区 94%，看起来顶天立地；整体缩到 0.5
+         后高 34、约占 47%，与界面左上角那枚（26px / 34px 方块 ≈ 48%）一致。
+         用 group 缩放而不是重算 path：viewBox 与两个 path 都保持原样，
+         以后改形状不用再算坐标。 -->
+    <group
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:pivotX="54"
+        android:pivotY="54">
 
-    <!-- 内部高光 -->
-    <path
-        android:fillColor="#4FC3F7"
-        android:pathData="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"
-        android:fillAlpha="0.55" />
+        <!-- 水滴主体 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z" />
+
+        <!-- 内部高光 -->
+        <path
+            android:fillColor="#4FC3F7"
+            android:pathData="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"
+            android:fillAlpha="0.55" />
+    </group>
 </vector>
