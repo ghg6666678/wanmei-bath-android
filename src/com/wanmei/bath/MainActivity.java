@@ -440,6 +440,19 @@ public class MainActivity extends android.app.Activity {
                     .putString("discAccepted", v == null ? "" : v).apply();
         }
 
+        /** 「验证码会显示在锁屏」的一次性场景告知是否看过（1.1.3.26）。
+            与 discAccepted 分开存：一个是启动门槛，一个是首次发码时的提醒。 */
+        @JavascriptInterface
+        public String getNotifyRiskAck() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("notifyRiskAck", "");
+        }
+
+        @JavascriptInterface
+        public void setNotifyRiskAck(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("notifyRiskAck", v == null ? "" : v).apply();
+        }
+
         /** 「不同意」时退出。JavascriptInterface 跑在 WebView 的桥线程，
             finish() 必须在主线程调用。 */
         @JavascriptInterface
