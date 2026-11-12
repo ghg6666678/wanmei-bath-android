@@ -32,7 +32,9 @@ https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishu
 https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk
 ```
 
-- SHA-256 `fd8499b4a0e893cd3c97a8b9c6877693329642118307f2bc4aaf2c1ece21e244`
+- SHA-256 `fd8499b4a0e893cd3c97a8b9c6877693329642118307f2bc4aaf2c1ece21e244`（GitHub 直链与官网均为这一版）
+- 注：jsDelivr 对 `@v1.1.5` 路径的缓存清不掉，可能暂时提供合并前的等价构建
+  （SHA-256 以 `415b2e44` 开头）。两者同为 1.1.5 / versionCode 58，功能完全一致，只是内置兜底清单的文案略有差异；以 GitHub 直链与官网下载为准
 - 与历史版本同一张证书，可直接覆盖安装，登录态不会丢
 - 全部版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
 
