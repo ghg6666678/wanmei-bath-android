@@ -158,6 +158,16 @@ input:focus{border-color:var(--brand)}
 .warnbox{font-size:12.5px;padding:11px 13px;border-radius:12px;margin-bottom:14px;line-height:1.6;
   background:rgba(247,144,9,.09);color:#b54708}
 @media (prefers-color-scheme:dark){ .warnbox{color:#fdb022} }
+/* 隐私政策正文：标题、列表、元信息要有层次，且整体比正文小一号 */
+.policy{font-size:13px}
+.policy .pmeta{font-size:11.5px;color:var(--ink3);margin:0 0 10px;line-height:1.6}
+.policy h4{font-size:13.5px;font-weight:700;margin:15px 0 5px;color:var(--ink)}
+.policy p{margin:0 0 8px}
+.policy ul{margin:0 0 8px;padding-left:17px}
+.policy li{margin:3px 0}
+/* 明文通知相关关键词：全应用唯一使用红色的地方，用来把风险从正文里拎出来 */
+.warn-red{color:var(--danger);font-weight:650}
+@media (prefers-color-scheme:dark){ .warn-red{color:#ff7b72} }
 
 .toast{position:fixed;left:50%;top:calc(18px + env(safe-area-inset-top));transform:translate(-50%,-16px);
   background:#101828;color:#fff;padding:11px 18px;border-radius:12px;font-size:13.5px;z-index:80;
@@ -496,8 +506,8 @@ input[type=tel]::placeholder{color:var(--ink3)}
       </div>
       <div class="setrow" id="rowDisc">
         <div class="grow">
-          <div class="name">免责声明</div>
-          <div class="info">验证码明文显示与共用设备的风险说明</div>
+          <div class="name">隐私政策</div>
+          <div class="info">我们如何处理你的信息，含明文通知的风险说明</div>
         </div>
         <div class="val"><i>›</i></div>
       </div>
@@ -667,7 +677,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     不想这样：在<strong>系统设置 → 通知 → 本应用</strong>里关掉「锁屏」；
     或直接关掉「允许通知」，那样锁屏和通知栏都不会显示验证码。
     <br><br>
-    <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见「设置 → 应用 → 免责声明」。</span>
+    <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见「设置 → 应用 → 隐私政策」。</span>
   </div>
   <div style="display:flex;gap:9px;margin-top:14px">
     <button class="btn ghost" style="flex:1" id="nrGoSet">去系统设置</button>
@@ -675,22 +685,75 @@ input[type=tel]::placeholder{color:var(--ink3)}
   </div>
 </div>
 
-<!-- 首次启动的免责声明（1.1.3.25）：锁定弹层，读完才能同意。
+<!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份
+     文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。
+     与「明文通知」有关的关键词用 .warn-red 标红。 -->
+<template id="policyTpl">
+  <div class="policy">
+    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.3.x 及以后</strong></p>
+    <p>本政策说明「洗澡助手」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
+
+    <h4>1. 适用范围</h4>
+    <p>本应用是个人开发的第三方客户端，<strong>与学校及水控服务商无隶属、委托或合作关系</strong>。学校与水控平台自身的处理行为适用其隐私规则，本应用无法控制。</p>
+
+    <h4>2. 我们处理的信息</h4>
+    <ul>
+      <li>你主动提供：手机号、短信验证码（仅用于换取登录凭据，<strong>短信验证码不保存</strong>）</li>
+      <li>平台返回：登录凭据 token、姓名、学校、学号、水控余额、预约订单、<span class="warn-red">开阀验证码</span></li>
+      <li>你创建的：星标楼栋、余额提醒阈值、通知与政策同意状态</li>
+      <li>设备与网络：版本号、系统版本、请求时间与结果（用于版本检查与排障）</li>
+    </ul>
+
+    <h4>3. 我们不收集</h4>
+    <p>身份证号、精确位置、通讯录、短信内容、相册、IMEI / OAID 等设备标识符、广告标识。本应用不接入广告、统计、崩溃收集或支付 SDK，不出售、不出租、不交换你的个人信息。</p>
+
+    <h4>4. 处理目的与依据</h4>
+    <p>登录与取码、展示余额与订单、发送取码通知 —— 属履行你请求的服务所必需；版本检查 —— 属保障功能与安全。本应用不做使用统计，不将信息用于广告或用户画像。</p>
+
+    <h4>5. 本地存储与保留期限</h4>
+    <p>登录凭据与用户信息以 JSON 存于应用私有目录，保留至你退出登录或卸载；偏好设置保留至你修改或卸载；订单与余额仅作内存缓存。卸载应用即删除全部本地数据。</p>
+
+    <h4>6. 第三方</h4>
+    <p>完美校园水控平台（vwater.59wanmei.com、xqh5.17wanxiao.com）：登录与取码请求由你的设备直接发往该平台，由其按自身规则处理；jsDelivr / GitHub（cdn.jsdelivr.net、raw.githubusercontent.com）：版本检查与安装包下载会向其暴露 IP、User-Agent 与请求路径。</p>
+
+    <h4>7. 共享、转让与公开披露</h4>
+    <p>除依法配合监管或司法机关外，本应用不向任何第三方提供你的个人信息；如未来发生运营主体变更，会提前在本政策与启动弹层中告知并重新取得同意。</p>
+
+    <h4>8. 跨境传输</h4>
+    <p>登录与业务数据不经过开发者服务器，也不向境外提供；仅版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent。</p>
+
+    <h4>9. <span class="warn-red">验证码明文显示</span>（重要）</h4>
+    <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>。它是否出现在 <span class="warn-red">锁屏</span> 上取决于系统通知设置：若系统允许本应用在 <span class="warn-red">锁屏</span> 显示通知，他人拿到你的手机<strong>无需解锁即可看到验证码并使用</strong>。</p>
+    <p>关闭方式：系统设置 → 通知 → 本应用 → 关掉「<span class="warn-red">锁屏</span>」；或关掉「允许通知」，此时 <span class="warn-red">锁屏</span> 与 <span class="warn-red">通知栏</span> 均不显示验证码。应用内「设置 → 验证码显示」也会给出当前状态与说明。</p>
+    <p><strong>由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</strong>在宿舍等共用环境中，请自行评估是否开启锁屏显示。</p>
+
+    <h4>10. 数据安全</h4>
+    <p>与平台、CDN 的通信均使用 HTTPS；数据存于应用私有目录，受系统沙箱保护；本应用不保存密码（登录使用短信验证码）；退出登录立即清除登录凭据。</p>
+
+    <h4>11. 你的权利</h4>
+    <p>访问：在应用内「我的」查看账号与设置。更正：重新登录同步。删除：退出登录删除凭据，卸载应用删除全部本地数据。撤回同意：关闭通知或卸载应用。咨询与投诉：见第 15 节。开发者承诺不因你行使权利而区别对待。</p>
+
+    <h4>12. 未成年人</h4>
+    <p>本应用面向高校在校学生，主要用户为成年人。不满 14 周岁者不应使用；14–18 周岁应在监护人同意和指导下使用。</p>
+
+    <h4>13. 变更与通知</h4>
+    <p>本政策内容变更时提升版本号，应用下次启动会重新展示并征求同意；在你重新同意前，应用不可继续使用。</p>
+
+    <h4>14. 外部链接</h4>
+    <p>本应用或相关页面可能链接到第三方内容（如项目主页、其他客户端的官网）。第三方内容由其自行负责，不适用本政策。</p>
+
+    <h4>15. 联系我们</h4>
+    <p>问题、投诉或行使个人信息权利，请通过项目主页的 Issues 提交：github.com/ghg6666678/wanmei-bath-android。我们会在 7 个工作日内回复。</p>
+  </div>
+</template>
+
+<!-- 首次启动的隐私政策（1.1.3.27，原免责声明）：锁定弹层，读完才能同意。
      不读完就点不动「同意并继续」——目的是让「已阅读」不是一句空话。 -->
 <div class="sheet" id="discFirst">
   <div class="bar-h"></div>
-  <h3>免责声明</h3>
+  <h3>隐私政策</h3>
   <div class="hint" id="discBody"
-       style="max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:1.9;font-size:13px">
-    本应用是非官方第三方客户端，与学校及水控服务商无关，也不处理任何支付。<br><br>
-    <strong>验证码会明文显示</strong>：它是否出现在锁屏 / 通知栏，取决于系统通知设置和本应用的通知。
-    在宿舍这类共用环境里，别人可能看到你锁屏上的验证码并抢先使用。<br><br>
-    <strong>由此产生的费用或其他损失，由使用者自行承担，作者不承担赔偿责任。</strong>
-    不接受这个风险，请在系统通知设置里关掉本应用的「锁屏」，或直接关掉「允许通知」，也可以现在选择不同意并退出。<br><br>
-    登录凭据只保存在本机；手机借出、丢失或被破解导致的损失，同样由使用者自行承担。<br><br>
-    本应用不收集、不上传你的账号信息，所有请求直接发往学校的水控服务；但网络环境、设备安全由使用者自行负责。<br><br>
-    以上内容如有变更，会在下次启动时重新征求同意。
-  </div>
+       style="max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:1.85;font-size:13px"></div>
   <div class="tipnote" id="discTip" style="margin:10px 2px 0">请向下滑动读完全文</div>
   <div style="display:flex;gap:9px;margin-top:12px">
     <button class="btn ghost" style="flex:1" id="discNo">不同意</button>
@@ -698,20 +761,14 @@ input[type=tel]::placeholder{color:var(--ink3)}
   </div>
 </div>
 
+<!-- 「设置 → 隐私政策」：同一份文本，随时回看 -->
 <div class="sheet" id="discSheet">
   <div class="bar-h"></div>
-  <h3>免责声明</h3>
-  <div class="hint" style="line-height:1.9;font-size:13px">
-    本应用是非官方第三方客户端，与学校及水控服务商无关，也不处理任何支付。<br><br>
-    <strong>验证码会明文显示</strong>：它是否出现在锁屏 / 通知栏，取决于系统通知设置和本应用的通知。
-    在宿舍这类共用环境里，别人可能看到你锁屏上的验证码并抢先使用。<br><br>
-    <strong>由此产生的费用或其他损失，由使用者自行承担，作者不承担赔偿责任。</strong>
-    不接受这个风险，请在系统通知设置里关掉本应用的「锁屏」，或直接关掉「允许通知」。<br><br>
-    登录凭据只保存在本机；手机借出、丢失或被破解导致的损失，同样由使用者自行承担。<br><br>
-    继续使用本应用，即表示你已阅读并同意以上内容。
-  </div>
+  <h3>隐私政策</h3>
+  <div class="hint" id="discSheetBody"
+       style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:1.85;font-size:13px"></div>
   <div style="display:flex;gap:9px;margin-top:16px">
-    <button class="btn" style="flex:1" id="discClose">我知道了</button>
+    <button class="btn" style="flex:1" id="discClose">关闭</button>
   </div>
 </div>
 
@@ -1199,7 +1256,7 @@ function setStar(v) {
     else localStorage.removeItem('starDorm');
   } catch (e) { }
 }
-/* 免责声明是否已同意（1.1.3.25）。存原生，理由同 firstRunShown：
+/* 隐私政策是否已同意（1.1.3.25 起，原名免责声明）。存原生，理由同 firstRunShown：
    file:// 下 localStorage 不可靠，而这个标记决定了能不能用，更不能丢。
 
    存的是【声明版本号】而不是布尔值：改一次条文就把 DISC_VER 加一，
@@ -1358,7 +1415,7 @@ $('#btnStarDorm').onclick = () => {
    当前状态、以及想改回去该去哪。关掉总闸后系统里所有子项都会隐藏、提示框
    也不再出现，App 内只剩这一条路能找回来，所以这里必须常驻。
    复用 notifyStatus() / openNotifySettings()，不新增原生桥。 */
-/* 场景告知是否看过（1.1.3.26）。和免责声明分开记：一个是启动门槛，
+/* 场景告知是否看过（1.1.3.26）。和隐私政策分开记：一个是启动门槛，
    一个是「第一次真的要发码」时的一次性提醒，语义不同。 */
 function notifyRiskAcked() {
   if (typeof Android !== 'undefined' && Android.getNotifyRiskAck) {
@@ -1457,7 +1514,7 @@ function renderCodeWarn(st, d) {
      之后，结果全新安装（通知权限还没给）和已经上岛的人根本看不到——用户
      正是照着这一点发现的。责任边界不和状态绑定。 */
   out.push('<span style="opacity:.85">若你选择让验证码显示在锁屏上，被他人看到并使用的风险由你自行承担——'
-    + '详见「设置 → 应用 → 免责声明」。</span>');
+    + '详见「设置 → 应用 → 隐私政策」。</span>');
 
   const off = !!(st && (st.perm === false || st.enabled === false));
   const flagged = !!(d && d.flagged);
@@ -1483,7 +1540,7 @@ function renderCodeWarn(st, d) {
        对这种要读码的场景没什么用，所以更实际的选择是干脆关掉锁屏显示。 */
     out.push('不想让锁屏出现验证码：在系统设置 → 通知 → 本应用里关掉「锁屏」开关。');
   }
-  /* 只声明事实与责任边界，不替用户关任何开关；完整条文在「应用 → 免责声明」 */
+  /* 只声明事实与责任边界，不替用户关任何开关；完整条文在「应用 → 隐私政策」 */
   box.innerHTML = out.join('<br>');
 }
 
@@ -3066,8 +3123,8 @@ window.__onShow = function (force) {
    __sheetLocked 为真而自动排队（__loginPending），等引导关掉再弹。 */
 let __firstRunGuide = false;
 
-/* 1.1.3.25：首次启动必须先读完并同意免责声明，之后才轮到校园卡引导。
-   顺序反了会让引导先占住弹层（锁定态），免责声明就弹不出来。 */
+/* 1.1.3.25：首次启动必须先读完并同意隐私政策，之后才轮到校园卡引导。
+   顺序反了会让引导先占住弹层（锁定态），隐私政策就弹不出来。 */
 function openFirstDisc() {
   const body = $('#discBody'), yes = $('#discYes'), tip = $('#discTip');
   if (!body || !yes) return;
@@ -3088,7 +3145,7 @@ $('#discYes').onclick = () => {
   hideSheet(true);          /* 锁定态只能从这里关 */
   if (!getFirstRunFlag()) {
     __firstRunGuide = true;
-    setTimeout(openGuide, 280);   /* 等免责声明的下滑动画收得差不多再上引导 */
+    setTimeout(openGuide, 280);   /* 等隐私政策的下滑动画收得差不多再上引导 */
   } else if (__loginPending) {
     __loginPending = false;
     setTimeout(openLogin, 300);
@@ -3100,6 +3157,18 @@ $('#discNo').onclick = () => {
   if (nat && nat.exitApp) { try { nat.exitApp(); return; } catch (e) { } }
   toast('需要同意后才能使用本应用');
 };
+
+/* 政策正文只维护一份（<template id="policyTpl">），启动弹层和设置里各自克隆。
+   否则两处各存一份，改条文迟早漏掉一处。 */
+function fillPolicy() {
+  const tpl = document.getElementById('policyTpl');
+  if (!tpl) return;
+  ['discBody', 'discSheetBody'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.innerHTML.trim()) el.innerHTML = tpl.innerHTML;
+  });
+}
+fillPolicy();
 
 if (!discAccepted()) {
   openFirstDisc();
