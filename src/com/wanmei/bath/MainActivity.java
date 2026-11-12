@@ -668,11 +668,57 @@ public class MainActivity extends android.app.Activity {
             o.put("liveWhy", why);
             o.put("sdk", Build.VERSION.SDK_INT);
             o.put("diag", promotedDiag());
+            o.put("lock", lockScreenInfo());
             o.put("ok", enabled && has && !silent);
         } catch (Exception e) {
             try { o.put("ok", false); } catch (Exception ignored) { }
         }
         return o.toString();
+    }
+
+    /** 锁屏到底会不会把通知内容露出来（1.1.3.21）。
+        读两个 Settings.Secure 开关：
+          lock_screen_show_notifications          —— 锁屏是否显示通知
+          lock_screen_allow_private_notifications —— 锁屏是否显示「敏感内容」
+        这两个键在 AOSP 上可读，但部分 ROM 会限制或干脆不写，所以用 -1 表示
+        「读不到」；前端拿到 canRead=false 时改说「如果你开了…」的说明，不硬猜。
+
+        还要说明一个我们自己造成的因素：本应用通知的 visibility 是 PUBLIC
+        （为了确保验证码不被系统打码），按 Android 语义 PUBLIC = 在所有锁屏上
+        完整显示，系统「隐藏敏感内容」对它不起作用。所以 channelVis 也一并带出去，
+        前端才能在「锁屏显示通知开着」时给出准确的警告，而不是含糊其辞。 */
+    private JSONObject lockScreenInfo() {
+        JSONObject o = new JSONObject();
+        try {
+            int show = android.provider.Settings.Secure.getInt(
+                    getContentResolver(), "lock_screen_show_notifications", -1);
+            int priv = android.provider.Settings.Secure.getInt(
+                    getContentResolver(), "lock_screen_allow_private_notifications", -1);
+            boolean secure = false;
+            try {
+                android.app.KeyguardManager km =
+                        (android.app.KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+                secure = km != null && km.isDeviceSecure();
+            } catch (Throwable ignored) { }
+            int vis = -1000;   /* Notification.VISIBILITY_NO_OVERRIDE */
+            try {
+                android.app.NotificationManager nm =
+                        (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null) {
+                    android.app.NotificationChannel ch = nm.getNotificationChannel(CH_CODE);
+                    if (ch != null) vis = ch.getLockscreenVisibility();
+                }
+            } catch (Throwable ignored) { }
+            o.put("canRead", show >= 0 || priv >= 0);
+            o.put("show", show == 1);
+            o.put("private", priv == 1);
+            o.put("secure", secure);
+            o.put("channelVis", vis);
+            o.put("public", vis == android.app.Notification.VISIBILITY_PUBLIC);
+        } catch (Throwable e) {
+            try { o.put("canRead", false); } catch (Throwable ignored) { }
+        }
+        return o;
     }
 
     /** 跳到本应用的「通知」总设置页（母类）。1.1.3.12 起这是唯一的设置入口：

@@ -359,7 +359,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，
          不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
     <div class="logo" id="hLogo">
-      <svg viewBox="0 0 108 108" width="26" height="26" aria-hidden="true">
+      <svg viewBox="0 0 108 108" width="21" height="21" aria-hidden="true">
         <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
         <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
       </svg>
@@ -475,11 +475,8 @@ input[type=tel]::placeholder{color:var(--ink3)}
         <div class="val"><span id="notifyStateVal">—</span><i>›</i></div>
       </div>
     </section>
-    <div class="warnbox" style="margin:10px 4px 14px">
-      <strong>注意：验证码会明文显示在锁屏和状态栏</strong>，拿到手机的人也能看到。<br>
-      关掉「实时活动」只会退回<strong>普通通知</strong>（通知栏里仍有码，锁屏显示与否看系统设置）；
-      <strong>要彻底不显示，得关掉「允许通知」</strong>。
-    </div>
+    <!-- 文案由 renderCodeWarn() 按「码会到哪 + 系统锁屏设置读不读得到」生成 -->
+    <div class="warnbox" id="warnCode" style="margin:10px 4px 14px"></div>
 
     <div class="sec-title"><h3>应用</h3></div>
     <section class="card">
@@ -1275,6 +1272,7 @@ function renderNotifyState() {
   if (!nat || !nat.notifyStatus) {
     val.textContent = '—';
     info.textContent = '浏览器版没有锁屏通知，验证码只在页面内显示。';
+    renderCodeWarn(null, null);
     return;
   }
   let st = null;
@@ -1283,11 +1281,12 @@ function renderNotifyState() {
   /* 三档说法要能互相对照，不能出现「已关闭 / 未开启」这种看起来同义的词。
      用「通知通道」→「能到哪」来描述：
        通知已关闭  = 系统层总开关关了，什么都没了（含锁屏与状态栏）
-       仅通知栏    = 通知在，但没开实时活动，只在通知栏；锁屏看不到码
+       仅通知栏    = 通知在，但没开实时活动；锁屏显不显示看系统的锁屏通知设置
        锁屏已显示  = 实时活动生效，锁屏 / 状态栏都能看到码
      老设备（没有实时活动接口）则是第四种：通知已开启，锁屏看系统策略。 */
   const liveCapable = Number(st && st.sdk) >= 36
     && ['yes', 'no', 'bad_ret'].indexOf(String(st && st.liveWhy)) >= 0;
+  const lock = st && st.lock ? st.lock : null;
   if (st && (st.perm === false || st.enabled === false)) {
     val.textContent = '通知已关闭';
     info.textContent = '应用通知被关掉了：锁屏和状态栏都不会显示验证码。点这里重新开启。';
@@ -1296,11 +1295,52 @@ function renderNotifyState() {
     info.textContent = '验证码正以“灵动岛”显示在锁屏 / 状态栏。';
   } else if (liveCapable) {
     val.textContent = '仅通知栏';
-    info.textContent = '通知能收到，但「实时活动」没开，所以锁屏上看不到验证码；点这里去打开。';
+    /* 普通通知会不会出现在锁屏，取决于系统设置；读到了就直说，读不到就别断言 */
+    info.textContent = (lock && lock.canRead && lock.show)
+      ? '通知能收到，但「实时活动」没开；普通通知会显示在锁屏上，风险见下方说明。点这里去打开。'
+      : '通知能收到，但「实时活动」没开，所以只在通知栏；点这里去打开。';
   } else {
     val.textContent = '通知已开启';
     info.textContent = '本机没有实时活动，验证码按普通通知显示，锁屏能否看到取决于系统设置。';
   }
+  renderCodeWarn(st, d);
+}
+
+/* 「验证码显示」下面的注意事项：按「码会到哪」和系统锁屏设置动态生成（1.1.3.21）。
+   · 上岛是用户自己选的，此时码在锁屏上是预期结果，不必再加一段吓人的话；
+   · 通知全关了什么都不会显示，也没必要讲风险；
+   · 只有「通知在、但没上岛」时才需要说明：普通通知在锁屏上可能被别人看到。
+   锁屏设置读得到（AOSP 的两个 Settings.Secure 键）就说事实，读不到就退回
+   「如果你开了…」的说明——不拿猜测当结论。 */
+function renderCodeWarn(st, d) {
+  const box = $('#warnCode');
+  if (!box) return;
+  const out = [];
+  out.push('<strong>注意：验证码会明文显示在锁屏和状态栏</strong>，拿到手机的人也能看到。');
+  out.push('关掉「实时活动」只会退回<strong>普通通知</strong>（通知栏里仍有码，锁屏显示与否看系统设置）；'
+    + '<strong>要彻底不显示，得关掉「允许通知」</strong>。');
+
+  const off = !!(st && (st.perm === false || st.enabled === false));
+  const flagged = !!(d && d.flagged);
+  if (off || flagged) { box.innerHTML = out.join('<br>'); return; }
+
+  const lock = st && st.lock ? st.lock : null;
+  if (lock && lock.canRead) {
+    if (!lock.show) {
+      out.push('当前系统：<strong>锁屏不显示通知</strong>，验证码要解锁后才看得到。');
+    } else if (lock.public === true) {
+      out.push('当前系统：<strong>锁屏会显示通知内容</strong>。本应用的通知按「公开内容」提交，'
+        + '系统里就算开了「锁屏隐藏通知内容」也挡不住——别人拿到手机不用解锁就能看到验证码。'
+        + (lock.secure ? '' : '（本机还没设锁屏密码，任何人都能解锁。）'));
+    } else {
+      out.push('当前系统：锁屏会显示通知。如果没开「锁屏隐藏通知内容」之类的开关，'
+        + '验证码可能被别人看到。');
+    }
+  } else {
+    out.push('读不到系统的锁屏设置：如果开了「锁屏显示通知」、又没开「锁屏隐藏通知内容」'
+      + '之类的开关，验证码可能被别人看到；需要解锁才能看到通知的话，安全程度会好一些。');
+  }
+  box.innerHTML = out.join('<br>');
 }
 
 function renderMe() {
@@ -1886,13 +1926,13 @@ const LIMIT_FIELDS = {
   },
   /* 余额提醒阈值：档位选择器换成和上面两项一样的滑块 + 输入框。
      一次洗澡的实际花费比 1 元略多一点，整数档（1 元太早、2 元太晚）不够用，
-     所以按 0.1 元递增，输入框允许两位小数。`offToggle` 复用弹层里那个
+     所以按 0.05 元递增（与「消费限额」一致），输入框允许两位小数。`offToggle` 复用弹层里那个
      「设为不限额」按钮做「关闭提醒」，不再单独做一个开关。 */
   bal: {
     title: '余额提醒阈值',
     hint: '余额低于该值时标记「偏低」，预约时也会提醒',
-    min: 50, max: 2000, step: 10, unit: '元', scale: 100, unlimited: 0,
-    stepText: '0.1 元', placeholder: '0.50 – 20.00，如 1.30',
+    min: 50, max: 2000, step: 5, unit: '元', scale: 100, unlimited: 0,
+    stepText: '0.05 元', placeholder: '0.50 – 20.00，如 1.35',
     bad: '只能填 0.50–20.00 的数字，最多两位小数',
     offToggle: true
   }
@@ -2051,7 +2091,7 @@ $('#rowNotify').onclick = () => {
 /* 余额提醒阈值：离散档位比自由输入更合适——它只是条提醒线，精确到分没有
    意义；「关闭」也是一档，放同一个选择器里，不用另做开关。 */
 /* 余额提醒阈值：和上面「消费限时 / 消费限额」共用同一个滑块 + 输入弹层，
-   按 0.1 元递增（一次洗澡的实际花费常在 1 元出头，整数档位不够用）。 */
+   按 0.05 元递增（与「消费限额」同一档精度，一次洗澡的实际花费常在 1 元出头）。 */
 $('#rowBalTh').onclick = () => {
   const cur = getBalTh();
   openLimit('bal', cur === 'off' ? 'off' : Math.round((Number(cur) || 5) * 100), v => {
