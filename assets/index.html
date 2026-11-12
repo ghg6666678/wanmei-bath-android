@@ -344,9 +344,16 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <header>
   <div class="brand">
-    <div class="logo">浴</div>
+    <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，
+         不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
+    <div class="logo">
+      <svg viewBox="0 0 108 108" width="21" height="21" aria-hidden="true">
+        <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
+        <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
+      </svg>
+    </div>
     <div>
-      <h1 id="hName">洗澡</h1>
+      <h1 id="hName">你好</h1>
       <div class="sub" id="hSub">正在连接…</div>
     </div>
   </div>
@@ -762,6 +769,21 @@ function verifyExpireAt() {
   return new Date(Date.now() + serverDayRemainMs());
 }
 function fmtClock(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+/* 顶部问候语，按【服务端】时间分时段。
+   原来这里显示「姓名 · 洗澡」：姓名在「我的 → 账号」里已经有了，标题重复
+   一次没有新信息；问候语至少随时间变化，也顺带把时钟校准结果表达出来
+   （校准失败时 serverNow 退回本机时间，问候语不会因此消失）。 */
+function greeting() {
+  const h = serverNow().getHours();
+  if (h < 5) return '夜深了';
+  if (h < 9) return '早上好';
+  if (h < 12) return '上午好';
+  if (h < 14) return '中午好';
+  if (h < 18) return '下午好';
+  if (h < 23) return '晚上好';
+  return '夜深了';
+}
 function ceilMinute(d) {
   const x = new Date(d);
   x.setSeconds(0, 0);
@@ -1121,6 +1143,10 @@ function balThresh() {
   const v = getBalTh();
   return v === 'off' ? null : (balThNum() || 5);
 }
+/* 设置行右侧的显示文本：'1.3 元' / '关闭' */
+function balThLabel() {
+  return getBalTh() === 'off' ? '关闭' : (balThresh() + ' 元');
+}
 /* 「一号宿舍a区」「一号宿舍b区」→ 同一栋「一号宿舍」 */
 function dormKey(r) {
   const s = String(r.bathroomname || '').trim();
@@ -1232,15 +1258,26 @@ function renderNotifyState() {
   let st = null;
   try { st = JSON.parse(String(nat.notifyStatus() || '{}')); } catch (e) { }
   const d = st && st.diag ? st.diag : null;
+  /* 三档说法要能互相对照，不能出现「已关闭 / 未开启」这种看起来同义的词。
+     用「通知通道」→「能到哪」来描述：
+       通知已关闭  = 系统层总开关关了，什么都没了（含锁屏与状态栏）
+       仅通知栏    = 通知在，但没开实时活动，只在通知栏；锁屏看不到码
+       锁屏已显示  = 实时活动生效，锁屏 / 状态栏都能看到码
+     老设备（没有实时活动接口）则是第四种：通知已开启，锁屏看系统策略。 */
+  const liveCapable = Number(st && st.sdk) >= 36
+    && ['yes', 'no', 'bad_ret'].indexOf(String(st && st.liveWhy)) >= 0;
   if (st && (st.perm === false || st.enabled === false)) {
-    val.textContent = '已关闭';
-    info.textContent = '应用通知已关闭，锁屏不会显示；点这里可改回来。';
+    val.textContent = '通知已关闭';
+    info.textContent = '应用通知被关掉了：锁屏和状态栏都不会显示验证码。点这里重新开启。';
   } else if (d && d.flagged) {
-    val.textContent = '已生效';
+    val.textContent = '锁屏已显示';
     info.textContent = '验证码正以“灵动岛”显示在锁屏 / 状态栏。';
+  } else if (liveCapable) {
+    val.textContent = '仅通知栏';
+    info.textContent = '通知能收到，但「实时活动」没开，所以锁屏上看不到验证码；点这里去打开。';
   } else {
-    val.textContent = '未开启';
-    info.textContent = '如需在锁屏显示，点这里打开「允许通知」与实时活动开关。';
+    val.textContent = '通知已开启';
+    info.textContent = '本机没有实时活动，验证码按普通通知显示，锁屏能否看到取决于系统设置。';
   }
 }
 
@@ -1256,8 +1293,7 @@ function renderMe() {
   const fareFen = Number(st.max_fare_limit || 0);
   $('#valFare').textContent = fareFen ? (fareFen >= 500000 ? '不限' : (fareFen / 100) + ' 元') : '—';
   /* 余额提醒阈值：本地偏好，不走服务端，读一下持久化值直接显示 */
-  const bth = getBalTh();
-  $('#valBalTh').textContent = (bth === 'off') ? '关闭' : (balThresh() + ' 元');
+  $('#valBalTh').textContent = balThLabel();
   const ver = state.appVersion || APP_VERSION;
   $('#valVersion').textContent = ver;
   const upd = state.update && state.update.latest;
@@ -1322,7 +1358,7 @@ async function loadAll() {
       state.serverCalibrated = false;
       $('#srvTime').textContent = '服务器时间未知 · 按本机时间估算';
     }
-    $('#hName').textContent = state.cfg.name ? state.cfg.name + ' · 洗澡' : '洗澡';
+    $('#hName').textContent = greeting();
     $('#hSub').textContent = state.cfg.school || '';
     renderBalance(); renderOrder(); renderRooms(); renderMe();
     scheduleRecPrefetch();          /* 会话已热，顺手把记录页的当前月拉下来 */
@@ -1352,6 +1388,7 @@ async function loadAll() {
       if (bg) bg.onclick = openGuide;
       $('#orderCard').classList.add('hidden');
       $('#balNum').textContent = '—';
+      $('#hName').textContent = greeting();
       $('#hSub').textContent = '';
       /* 登录态失效：先给一条明确提示，再弹登录框，避免打开 App 不知道发生了什么 */
       if (!__autoLoginShown) {
@@ -1783,6 +1820,18 @@ const LIMIT_FIELDS = {
     min: 100, max: 2000, step: 5, unit: '元', scale: 100, unlimited: 500000,
     stepText: '0.05 元', placeholder: '1.00 – 20.00，如 2.35',
     bad: '只能填 1.00–20.00 的数字，最多两位小数'
+  },
+  /* 余额提醒阈值：档位选择器换成和上面两项一样的滑块 + 输入框。
+     一次洗澡的实际花费比 1 元略多一点，整数档（1 元太早、2 元太晚）不够用，
+     所以按 0.1 元递增，输入框允许两位小数。`offToggle` 复用弹层里那个
+     「设为不限额」按钮做「关闭提醒」，不再单独做一个开关。 */
+  bal: {
+    title: '余额提醒阈值',
+    hint: '余额低于该值时标记「偏低」，预约时也会提醒',
+    min: 50, max: 2000, step: 10, unit: '元', scale: 100, unlimited: 0,
+    stepText: '0.1 元', placeholder: '0.50 – 20.00，如 1.30',
+    bad: '只能填 0.50–20.00 的数字，最多两位小数',
+    offToggle: true
   }
 };
 let numCur = null;
@@ -1808,9 +1857,9 @@ function limitPaint(touchInput) {
   r.disabled = numCur.unlimitedOn;
   box.disabled = numCur.unlimitedOn;
   if (numCur.unlimitedOn) {
-    $('#numBig').textContent = '不限';
+    $('#numBig').textContent = cfg.offToggle ? '关闭' : '不限';
     $('#numBigUnit').textContent = '';
-    if (touchInput) box.value = '不限';
+    if (touchInput) box.value = cfg.offToggle ? '关闭' : '不限';
   } else {
     $('#numBig').textContent = limitFmt(cfg, v);
     $('#numBigUnit').textContent = cfg.unit;
@@ -1819,7 +1868,9 @@ function limitPaint(touchInput) {
   }
   const ub = $('#numUnlimited');
   ub.classList.toggle('on', numCur.unlimitedOn);
-  ub.textContent = numCur.unlimitedOn ? '设置限额' : '设为不限额';
+  ub.textContent = cfg.offToggle
+    ? (numCur.unlimitedOn ? '重新开启提醒' : '关闭提醒')
+    : (numCur.unlimitedOn ? '设置限额' : '设为不限额');
   const e = $('#numErr');
   e.textContent = numCur.err || '';
   e.className = 'numerr' + (numCur.err ? (numCur.ok ? ' good' : ' bad') : '');
@@ -1843,28 +1894,40 @@ function limitReadInput(normalize) {
 }
 function openLimit(kind, value, onSave) {
   const cfg = LIMIT_FIELDS[kind];
+  /* value 一律按「最小单位」传进来：金额类的单位是分（scale=100）。
+     offToggle 的弹层多一个「关闭」状态，此时没有数值，按默认 5 元展开滑块。 */
+  const isOff = !!cfg.offToggle && String(value) === 'off';
+  const num = cfg.offToggle ? (Number(value) || 500) : Number(value);
   numCur = {cfg, onSave, val: cfg.min, err: '', ok: true,
-            unlimitedOn: cfg.unlimited > 0 && Number(value) >= cfg.unlimited};
-  const v = Math.min(Math.max(Number(value) || cfg.min, cfg.min), cfg.max);
+            unlimitedOn: cfg.offToggle ? isOff
+              : (cfg.unlimited > 0 && Number(value) >= cfg.unlimited)};
+  const v = Math.min(Math.max(num || cfg.min, cfg.min), cfg.max);
   numCur.val = cfg.min + Math.round((v - cfg.min) / cfg.step) * cfg.step;
   $('#numTitle').textContent = cfg.title;
   $('#numHint').textContent = cfg.hint;
-  /* 取消预约的影响要一眼看见：按当前预约条数给出醒目提示，而不是一行灰色小字 */
-  const nOrders = (state.orders || []).length;
-  $('#numWarn').classList.toggle('calm', !nOrders);
-  $('#numWarnTitle').textContent = nOrders
-    ? '保存后会自动取消已有预约'
-    : '当前没有预约，保存不会取消任何订单';
-  $('#numWarnDesc').textContent = nOrders
-    ? `现有 ${nOrders} 条预约会被取消，保存后请重新预约。`
-    : '新数值只对之后新预约的订单生效。';
-  $('#numSave').textContent = nOrders ? '保存并取消预约' : '保存';
+  if (cfg.offToggle) {
+    /* 阈值是本地偏好，不会动服务端订单，那句「保存会取消预约」的警告要藏掉 */
+    $('#numWarn').style.display = 'none';
+    $('#numSave').textContent = '保存';
+  } else {
+    $('#numWarn').style.display = '';
+    /* 取消预约的影响要一眼看见：按当前预约条数给出醒目提示，而不是一行灰色小字 */
+    const nOrders = (state.orders || []).length;
+    $('#numWarn').classList.toggle('calm', !nOrders);
+    $('#numWarnTitle').textContent = nOrders
+      ? '保存后会自动取消已有预约'
+      : '当前没有预约，保存不会取消任何订单';
+    $('#numWarnDesc').textContent = nOrders
+      ? `现有 ${nOrders} 条预约会被取消，保存后请重新预约。`
+      : '新数值只对之后新预约的订单生效。';
+    $('#numSave').textContent = nOrders ? '保存并取消预约' : '保存';
+  }
   $('#numUnit').textContent = cfg.unit;
   $('#numInput').placeholder = cfg.placeholder;
   $('#numInput').setAttribute('inputmode', cfg.scale === 100 ? 'decimal' : 'numeric');
   $('#numMin').textContent = limitFmt(cfg, cfg.min) + ' ' + cfg.unit;
   $('#numMax').textContent = limitFmt(cfg, cfg.max) + ' ' + cfg.unit;
-  $('#numUnlimited').style.display = cfg.unlimited ? '' : 'none';
+  $('#numUnlimited').style.display = (cfg.unlimited || cfg.offToggle) ? '' : 'none';
   limitPaint(true);
   showSheet('#numSheet');
 }
@@ -1894,11 +1957,13 @@ $('#numSave').onclick = () => {
     if (!numCur.ok) return;
   }
   const cfg = numCur.cfg;
+  /* offToggle 的「关闭」态没有数值，直接回 'off' 给调用方存起来 */
+  const off = !!cfg.offToggle && numCur.unlimitedOn;
   const v = numCur.unlimitedOn ? cfg.unlimited : numCur.val;
   const cb = numCur.onSave;
   numCur = null;
   hideSheet();
-  cb(cfg.scale === 100 ? v / 100 : v);
+  cb(off ? 'off' : (cfg.scale === 100 ? v / 100 : v));
 };
 
 $('#rowTime').onclick = () => {
@@ -1922,20 +1987,17 @@ $('#rowNotify').onclick = () => {
 
 /* 余额提醒阈值：离散档位比自由输入更合适——它只是条提醒线，精确到分没有
    意义；「关闭」也是一档，放同一个选择器里，不用另做开关。 */
+/* 余额提醒阈值：和上面「消费限时 / 消费限额」共用同一个滑块 + 输入弹层，
+   按 0.1 元递增（一次洗澡的实际花费常在 1 元出头，整数档位不够用）。 */
 $('#rowBalTh').onclick = () => {
-  const cur = getBalTh() || '5';
-  const opts = ['off', '0.5', '1', '2', '3', '5', '10'].map(v => ({
-    v: v, label: v === 'off' ? '关闭' : (Number(v) + ' 元')
-  }));
-  openPicker('余额提醒阈值',
-    '余额低于该值时首页标记「偏低」，预约时给出提醒；选「关闭」则不再提醒（余额为 0 仍会提示）。',
-    opts, cur, v => {
-      setBalTh(v);
-      /* 阈值变了立刻反映到首页胶囊和本行数值，不等下次 loadAll */
-      renderBalance();
-      const span = $('#valBalTh');
-      if (span) span.textContent = (v === 'off') ? '关闭' : (Number(v) + ' 元');
-    });
+  const cur = getBalTh();
+  openLimit('bal', cur === 'off' ? 'off' : Math.round((Number(cur) || 5) * 100), v => {
+    setBalTh(v === 'off' ? 'off' : String(v));
+    /* 阈值变了立刻反映到首页胶囊和本行数值，不等下次 loadAll */
+    renderBalance();
+    const span = $('#valBalTh');
+    if (span) span.textContent = balThLabel();
+  });
 };
 
 /* ---------- 充值说明弹层：只给指引并打开微信，不处理支付 ---------- */
@@ -2710,6 +2772,25 @@ window.__onBack = function () {
    不到 30 秒），表现就是「开启通知要重启软件才生效」。 */
 let __lastShow = 0;
 window.__onShow = function (force) {
+  /* 先做一轮【纯本地】的刷新，不发网络请求、也不受下面 30 秒防抖限制：
+     1) 重发通知——从系统设置页改完「实时活动」开关回来时，系统不会主动
+        重新判定已有的通知对象，必须由 App 再提交一次 notify()，它才会按
+        新开关重新走提升流程（这就是「下拉刷新后才正确」的真正原因，和
+        权限授予那条路不是一回事）；
+     2) 重画通知状态行与提示框，让「仅通知栏 → 锁屏已显示」立刻反映出来。
+     系统提升是异步的，读一次往往还是旧值，所以隔一会儿再补读两次。 */
+  const local = () => {
+    /* 冷启动时 state 还是空的：此时若去「重发通知」，等于用空订单把上次
+       进程留下的常驻通知清掉，等 loadAll 回来再补上，中间闪一下。
+       所以只在已经拿到登录态、也拿到过一次订单列表之后才做本地刷新。 */
+    if (!((state.cfg || {}).hasToken)) return;
+    try { renderOrder(); } catch (e) { }
+    try { renderNotifyState(); } catch (e) { }
+  };
+  local();
+  setTimeout(local, 500);
+  setTimeout(local, 1500);
+
   if (document.querySelector('.sheet.on')) return;   // 弹层开着，别打断
   if (!((state.cfg || {}).hasToken)) return;         // 还没登录，无需刷新
   const now = Date.now();
