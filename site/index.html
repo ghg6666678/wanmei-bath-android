@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>智水 · 完美校园洗澡的精简客户端</title>
+<meta name="description" content="只做一件事：打开就是洗澡页。验证码上锁屏、一键预约、消费限时限额，无广告、无推送、不收集账号信息。">
+<meta name="theme-color" content="#f4f6fb">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='26' fill='%232563eb'/%3E%3Cpath d='M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="logo">
+        <svg viewBox="0 0 108 108" width="20" height="20" aria-hidden="true">
+          <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
+          <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
+        </svg>
+      </span>
+      智水
+    </a>
+    <nav class="site">
+      <a href="#features">功能</a>
+      <a href="#download">下载</a>
+      <a href="changelog.html">更新日志</a>
+      <a href="privacy.html">隐私政策</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <span class="tag"><i class="dot"></i><span id="heroVersion">最新版</span></span>
+    <h1>打开就是洗澡页，<br><em>验证码直接在锁屏</em>。</h1>
+    <p class="lede">
+      完美校园「智慧用水 → 洗澡」的精简客户端。没有开屏广告、没有首页瀑布流，
+      不需要 root、不需要原版 App。手机号直接登录，预约、取码、上锁屏一条线。
+    </p>
+    <div class="cta">
+      <a class="btn primary" id="dlPrimary" href="#download">下载 APK</a>
+      <a class="btn ghost" id="dlMirror" href="#" target="_blank" rel="noopener">CDN 镜像</a>
+      <span class="meta" id="dlMeta"></span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="statSize">—</b><span>安装包体积</span></div>
+      <div class="stat"><b>0</b><span>广告与推送 SDK</span></div>
+      <div class="stat"><b>直连</b><span>不经过开发者服务器</span></div>
+      <div class="stat"><b id="statVersion">—</b><span>当前版本</span></div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <h2>它只做洗澡这一件事</h2>
+    <p class="sub">官方入口里「淋浴」和「洗澡」是两个页面，去洗个澡要在手机上戳七八下。这里打开就是它。</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 21v-3M3 12h3M21 12h-3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg></div>
+        <h3>验证码上锁屏</h3>
+        <p>取码后自动发一条常驻通知，接入 Android 16 实时活动（“灵动岛” / 流体云），不用点亮屏幕找 App。</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 9h18"/><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M9 15l2 2 4-4"/></svg></div>
+        <h3>一键预约</h3>
+        <p>浴室列表直接显示空闲状态，点一下就用服务端时间提交，不再被“不能早于当前时间”挡住。</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h16M4 17h7"/><circle cx="17" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg></div>
+        <h3>消费限时 / 限额</h3>
+        <p>滑块加输入框，金额按 0.05 元递增；保存时自动取消旧预约，避免设置不生效。</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M17 7H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <h3>余额与提醒</h3>
+        <p>水控余额随时可看，低于自设阈值时首页标记「偏低」，预约时也会提醒。</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg></div>
+        <h3>用水记录</h3>
+        <p>按月查看每次洗澡的时长与金额，下拉刷新即取最新。</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10h5v4h-5"/><path d="M6 9h7"/></svg></div>
+        <h3>多预约翻页</h3>
+        <p>同时约了两个浴室时，验证码区左右滑动切换，每个码下面都带使用提示，取消按钮跟着当前页走。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>下载与安装</h2>
+    <p class="sub">只支持 Android 8.0 及以上。安装包约 <span id="sizeInline">100 KB</span>，不申请定位、通讯录、短信等权限。</p>
+    <ol class="steps">
+      <li>下载 APK 并安装。系统提示「未知来源」时，允许你正在使用的浏览器安装即可。</li>
+      <li>用手机号登录：验证码由完美校园下发，登录成功后凭据只保存在本机。</li>
+      <li>账号需要先在官方侧绑定校园卡，否则登录后会提示缺少信息。绑定方式与密码规则<strong>以学校通知为准</strong>。</li>
+      <li>想更方便：先在系统通知设置里给本应用开「允许通知」；想连锁屏也能看码，再打开「实时活动」（ColorOS 叫流体云，澎湃 OS 叫实时动态）。</li>
+    </ol>
+  </section>
+
+  <section class="block">
+    <h2>关于锁屏上的验证码</h2>
+    <p class="sub">这是本应用最方便、也最需要你自己权衡的一点。</p>
+    <div class="note danger">
+      取码后，验证码会以<span class="red">明文</span>出现在通知栏，开启「实时活动」后还可能出现在
+      <span class="red">锁屏</span>、<span class="red">状态栏胶囊</span>甚至<span class="red">息屏显示</span>上——
+      手机放在桌上、没有解锁，旁边的人也可能直接看到。
+      <br><br>
+      不想这样：在系统设置 → 通知 → 本应用里关掉「<span class="red">锁屏</span>」；要连通知栏也不显示，就关掉「允许通知」。
+      <br><br>
+      由此产生的费用或其他损失由使用者自行承担。完整说明见
+      <a href="privacy.html#s9">隐私政策第 9 条</a>。
+    </div>
+  </section>
+
+  <section class="block" id="download">
+    <h2>获取安装包</h2>
+    <p class="sub">GitHub 直连在部分移动网络下可能较慢，下面的镜像走 CDN，通常更快。</p>
+    <div class="cta" style="margin-top:8px">
+      <a class="btn primary" id="dlPrimary2" href="#">下载 APK</a>
+      <a class="btn ghost" id="dlMirror2" href="#" target="_blank" rel="noopener">CDN 镜像</a>
+      <a class="btn ghost" id="dlAll" href="#" target="_blank" rel="noopener">全部版本</a>
+    </div>
+    <p class="meta" id="dlNote" style="margin-top:12px"></p>
+
+    <div class="note warn" style="margin-top:18px">
+      <strong>1.0.3 已撤回，请勿使用。</strong>该版本的「检查更新」里带两个第三方 GitHub 加速代理，
+      其中一个在移动网络下会跳转到不良站点。已安装 1.0.3 的，请直接安装当前版本，不要在旧版里点「镜像」。
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>常见问题</h2>
+    <details>
+      <summary>锁屏上看不到验证码？</summary>
+      <p>先确认系统里给本应用开了「允许通知」；再确认本应用通知页里的「实时活动」开关（ColorOS 叫「流体云显示实时活动」）已打开。
+         部分系统还需要单独打开该应用的「锁屏」开关。应用内「设置 → 验证码显示」会显示当前状态，并给出对应提示。</p>
+    </details>
+    <details>
+      <summary>会不会收集我的账号或个人信息？</summary>
+      <p>不会上传到开发者服务器。登录凭据（token）与用户信息只存在本机；请求直接发往完美校园的水控接口。
+         应用内没有统计 SDK、没有广告、没有崩溃上报。详见<a href="privacy.html">隐私政策</a>。</p>
+    </details>
+    <details>
+      <summary>为什么有时取码了却没有通知？</summary>
+      <p>常见的三种原因：通知权限被关掉；系统把通知归到「静默」；或者通知被系统的省电策略拦截。
+         可以在「设置 → 验证码显示」查看当前状态，按提示去系统设置调整。</p>
+    </details>
+    <details>
+      <summary>支持哪些学校？</summary>
+      <p>凡是使用完美校园「智慧用水」的学校理论上都可用，但各校的水控服务与卡务规则不同，
+         实际表现可能不一样。遇到问题欢迎在<a href="https://github.com/ghg6666678/wanmei-bath-android/issues" target="_blank" rel="noopener">项目主页</a>反馈。</p>
+    </details>
+    <details>
+      <summary>和应用商店里的版本有什么区别？</summary>
+      <p>本项目只通过 GitHub Releases 分发，不上架应用商店。安装包为个人开发者签名，升级时直接覆盖安装即可，
+         不会丢登录态与设置。</p>
+    </details>
+  </section>
+
+  <section class="block">
+    <div class="note">
+      <strong>非官方声明</strong>：本应用是个人开发的第三方客户端，与完美校园、新开普及任何学校均无隶属或合作关系。
+      应用内不处理支付，充值请走官方渠道。使用前请阅读<a href="privacy.html">隐私政策</a>。
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap row">
+    <span>© 2026 智水 · 个人项目</span>
+    <a href="changelog.html">更新日志</a>
+    <a href="privacy.html">隐私政策</a>
+    <a id="footRepo" href="#" target="_blank" rel="noopener">项目主页</a>
+    <a id="footIssue" href="#" target="_blank" rel="noopener">问题反馈</a>
+  </div>
+</footer>
+
+<script src="site-config.js"></script>
+<script>
+(function () {
+  var S = window.SITE || {};
+  var L = S.latest || {};
+  var repo = S.repo || '';
+  var base = 'https://github.com/' + repo;
+  var tag = L.tag || ('v' + L.version);
+  var apk = L.apkName || ('zhishui-' + L.version + '.apk');
+  var dl = base + '/releases/download/' + tag + '/' + apk;
+  var mirror = 'https://cdn.jsdelivr.net/gh/' + repo + '@' + tag + '/release/' + apk;
+  var kb = L.sizeBytes ? Math.round(L.sizeBytes / 1024) + ' KB' : '';
+
+  function set(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
+  function href(id, url) { var el = document.getElementById(id); if (el) el.href = url; }
+
+  set('heroVersion', '最新版 ' + (L.version || ''));
+  set('statVersion', L.version || '—');
+  if (kb) { set('statSize', kb); set('sizeInline', kb); }
+  set('dlMeta', (L.version ? 'v' + L.version + ' · ' : '') + kb + (L.date ? ' · ' + L.date : ''));
+  set('dlNote', '如果直链 404，说明这个版本还没有发布到 Releases，请点「全部版本」下载当前正式版。');
+
+  ['dlPrimary', 'dlPrimary2'].forEach(function (id) { href(id, dl); });
+  ['dlMirror', 'dlMirror2'].forEach(function (id) { href(id, mirror); });
+  href('dlAll', base + '/releases');
+  href('footRepo', base);
+  href('footIssue', S.contact || (base + '/issues'));
+})();
+</script>
+</body>
+</html>

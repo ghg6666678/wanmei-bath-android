@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>隐私政策 · 智水</title>
+<meta name="description" content="智水隐私政策：处理哪些信息、存在哪里、与哪些第三方交互，以及你对这些信息的权利。">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='26' fill='%232563eb'/%3E%3Cpath d='M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="logo">
+        <svg viewBox="0 0 108 108" width="20" height="20" aria-hidden="true">
+          <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
+          <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
+        </svg>
+      </span>
+      智水
+    </a>
+    <nav class="site">
+      <a href="index.html#features">功能</a>
+      <a href="index.html#download">下载</a>
+      <a href="changelog.html">更新日志</a>
+      <a href="privacy.html">隐私政策</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+<article class="doc">
+  <h1>隐私政策</h1>
+  <p class="pmeta">
+    政策版本 <strong id="pVer">v1</strong> ·
+    生效日期 <strong id="pDate">2026-11-12</strong> ·
+    适用版本 <strong>1.1.3.x 及以后</strong>
+  </p>
+
+  <p>本政策说明「智水」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
+
+  <div class="toc">
+    <strong>目录</strong>
+    <ol>
+      <li><a href="#s1">适用范围</a></li>
+      <li><a href="#s2">我们处理的信息</a></li>
+      <li><a href="#s3">我们不收集的信息</a></li>
+      <li><a href="#s4">处理目的与依据</a></li>
+      <li><a href="#s5">本地存储与保留期限</a></li>
+      <li><a href="#s6">第三方</a></li>
+      <li><a href="#s7">共享、转让与公开披露</a></li>
+      <li><a href="#s8">跨境传输</a></li>
+      <li><a href="#s9">验证码明文显示（重要）</a></li>
+      <li><a href="#s10">数据安全</a></li>
+      <li><a href="#s11">你的权利</a></li>
+      <li><a href="#s12">未成年人保护</a></li>
+      <li><a href="#s13">变更与通知</a></li>
+      <li><a href="#s14">外部链接</a></li>
+      <li><a href="#s15">联系我们</a></li>
+    </ol>
+  </div>
+
+  <h2 id="s1">1. 适用范围</h2>
+  <p>本应用是个人开发的第三方客户端，<strong>与学校及水控服务商无隶属、委托或合作关系</strong>
+     学校与水控平台自身的处理行为适用其隐私规则，本应用无法控制。</p>
+
+  <h2 id="s2">2. 我们处理的信息</h2>
+  <ul>
+    <li>你主动提供：手机号、短信验证码（仅用于换取登录凭据，<strong>短信验证码不保存</strong>）</li>
+    <li>平台返回：登录凭据 token、姓名、学校、学号、水控余额、预约订单、开阀验证码</li>
+    <li>你创建的：星标楼栋、余额提醒阈值、通知与政策同意状态</li>
+    <li>设备与网络：版本号、系统版本、请求时间与结果（用于版本检查与排障）</li>
+  </ul>
+
+  <h2 id="s3">3. 我们不收集的信息</h2>
+  <p>身份证号、精确位置、通讯录、短信内容、相册、IMEI / OAID 等设备标识符、广告标识。
+     本应用不接入广告、统计、崩溃收集或支付 SDK，不出售、不出租、不交换你的个人信息。</p>
+
+  <h2 id="s4">4. 处理目的与依据</h2>
+  <p>登录与取码、展示余额与订单、发送取码通知 —— 属履行你请求的服务所必需；
+     版本检查 —— 属保障功能与安全。本应用不做使用统计，不将信息用于广告或用户画像。</p>
+
+  <h2 id="s5">5. 本地存储与保留期限</h2>
+  <p>登录凭据与用户信息以 JSON 形式存于应用私有目录，保留至你退出登录或卸载；
+     偏好设置保留至你修改或卸载；订单与余额仅作内存缓存。卸载应用即删除全部本地数据。</p>
+
+  <h2 id="s6">6. 第三方</h2>
+  <p>完美校园水控平台（vwater.59wanmei.com、xqh5.17wanxiao.com）：登录与取码请求由你的设备直接发往该平台，
+     由其按自身规则处理；jsDelivr / GitHub（cdn.jsdelivr.net、raw.githubusercontent.com）：
+     版本检查与安装包下载会向其暴露 IP、User-Agent 与请求路径。</p>
+
+  <h2 id="s7">7. 共享、转让与公开披露</h2>
+  <p>除依法配合监管或司法机关外，本应用不向任何第三方提供你的个人信息；
+     如未来发生运营主体变更，会提前在本政策与应用内启动弹层中告知并重新取得同意。</p>
+
+  <h2 id="s8">8. 跨境传输</h2>
+  <p>登录与业务数据不经过开发者服务器，也不向境外提供；仅版本检查与安装包下载可能由 jsDelivr 的境外节点响应，
+     涉及 IP 与 User-Agent。</p>
+
+  <h2 id="s9">9. <span class="red">验证码明文显示</span>（重要）</h2>
+  <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="red">明文验证码</span>，
+     并请求系统把它提升为“灵动岛”（ColorOS 称「流体云」，澎湃 OS 叫「实时动态」）。是否提升由系统决定。</p>
+  <p>一旦被提升，验证码不只是出现在<span class="red">通知栏</span>和<span class="red">锁屏</span>上，
+     还可能显示在<span class="red">状态栏胶囊</span>与<span class="red">息屏显示</span>上：
+     手机放在桌上、屏幕熄灭、未解锁时，旁边的人也可能直接看到。这是系统实时活动本来的形态，
+     本应用无法限定它只在哪一层显示。</p>
+  <p>关闭方式（按影响范围从小到大）：</p>
+  <ul>
+    <li>只关普通通知的锁屏显示：系统设置 → 通知 → 本应用 → 关掉「<span class="red">锁屏</span>」</li>
+    <li>不让它上“灵动岛”：关掉「实时活动」开关（ColorOS 叫「流体云显示实时活动」，澎湃 OS 4 叫「实时动态」）。
+        注意：这只是退回<span class="red">普通通知</span>，通知栏里仍有验证码</li>
+    <li>彻底不显示：关掉「允许通知」，此时<span class="red">锁屏</span>、<span class="red">通知栏</span>、
+        <span class="red">息屏</span>都不会出现验证码</li>
+  </ul>
+  <p>应用内「设置 → 验证码显示」会给出当前状态与说明。
+     <strong>由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</strong>
+     在宿舍等共用环境中，请自行评估是否开启。</p>
+
+  <h2 id="s10">10. 数据安全</h2>
+  <p>与平台、CDN 的通信均使用 HTTPS；数据存于应用私有目录，受系统沙箱保护；
+     本应用不保存密码（登录使用短信验证码）；退出登录立即清除登录凭据。</p>
+
+  <h2 id="s11">11. 你的权利</h2>
+  <p>访问：在应用内「我的」查看账号与设置。更正：重新登录同步。删除：退出登录删除凭据，
+     卸载应用删除全部本地数据。撤回同意：关闭通知或卸载应用。咨询与投诉：见第 15 节。
+     开发者承诺不因你行使权利而区别对待。</p>
+
+  <h2 id="s12">12. 未成年人保护</h2>
+  <p>本应用面向高校在校学生，主要用户为成年人。不满 14 周岁者不应使用；
+     14–18 周岁应在监护人同意和指导下使用。</p>
+
+  <h2 id="s13">13. 变更与通知</h2>
+  <p>本政策内容变更时提升版本号，应用下次启动会重新展示并征求同意；在你重新同意前，应用不可继续使用。
+     本页顶部的「政策版本」与应用内记录的同意版本一致。</p>
+
+  <h2 id="s14">14. 外部链接</h2>
+  <p>本应用或本站点可能链接到第三方内容（如项目主页、其他客户端的官网）。
+     第三方内容由其自行负责，不适用本政策。</p>
+
+  <h2 id="s15">15. 联系我们</h2>
+  <p>问题、投诉或行使个人信息权利，请通过项目主页的 Issues 提交：
+     <a href="https://github.com/ghg6666678/wanmei-bath-android/issues" target="_blank" rel="noopener">
+     github.com/ghg6666678/wanmei-bath-android/issues</a>。我们会在 7 个工作日内回复。</p>
+
+  <p style="margin-top:26px"><a href="index.html">← 返回首页</a></p>
+</article>
+</main>
+
+<footer class="site">
+  <div class="wrap row">
+    <span>© 2026 智水 · 个人项目</span>
+    <a href="changelog.html">更新日志</a>
+    <a href="privacy.html">隐私政策</a>
+    <a href="https://github.com/ghg6666678/wanmei-bath-android" target="_blank" rel="noopener">项目主页</a>
+  </div>
+</footer>
+
+<script src="site-config.js"></script>
+<script>
+(function () {
+  var S = window.SITE || {};
+  var v = document.getElementById('pVer'), d = document.getElementById('pDate');
+  if (v && S.policyVersion) v.textContent = 'v' + S.policyVersion;
+  if (d && S.policyDate) d.textContent = S.policyDate;
+})();
+</script>
+</body>
+</html>

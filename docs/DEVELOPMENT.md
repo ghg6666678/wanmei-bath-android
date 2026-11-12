@@ -1435,3 +1435,28 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 剩下的，就是把每次改动都配上可重复的验证，以及别在使用者设备上替对方做决定。
 
 **外加一条，来自第 11 节的教训**：验证要能区分「公式自洽」和「事实成立」。一个算得出正确数字的公式，喂给它的输入可能是凭空假设的——那种验证只能证明推导没写错，证明不了世界是这样。
+
+## 14. 官网（site/）
+
+1.1.3.42 起在仓库里带了一个静态官网，目录 `site/`，纯 HTML/CSS/JS，无构建步骤。
+
+**为什么是静态站 + 相对路径**：静态站可以零成本搬来搬去；全站不写死域名，部署到 GitHub Pages、任意静态托管（含 WorkBuddy 发布）都不用改代码。首页里的版本号、体积、下载地址统一从 `site/site-config.js` 读，发版只改这一个文件。
+
+**文件**：
+
+| 文件 | 作用 |
+| --- | --- |
+| `index.html` | 首页：介绍、功能、下载与安装、锁屏风险提示、常见问题 |
+| `privacy.html` | 隐私政策（15 节，第 9 节带 `#s9` 锚点，供首页与 App 内引用） |
+| `changelog.html` | 更新日志，按时间倒序 |
+| `style.css` | 全站样式，深浅两套主题 |
+| `site-config.js` | 版本 / 体积 / 政策版本 / 仓库地址，唯一需要维护的配置 |
+
+**政策版本要与 App 对齐**：`site-config.js` 里的 `policyVersion` 必须和 App 内 `DISC_VER` 一致。改条文时两边一起 +1，否则「官网说 v2、App 还停在 v1」会自相矛盾。
+
+**部署**（两条路，任选）：
+
+- GitHub Pages：仓库 Settings → Pages → Source 选 `main` + `/docs` 或 `/ (root)` 都不含 `site/`，**所以要么用 Actions 把 `site/` 作为产物上传**，要么把 `site/` 内容复制到 Pages 指定的目录。简单起见也可以在 Settings 里改用 Actions 模板「Static HTML」，把 `path` 指到 `site`。
+- 其他静态托管（含 WorkBuddy 发布）：直接把 `site/` 目录作为根目录上传即可。
+
+**未完成**：站内下载按钮指向 `releases/download/v<版本>/<apk>`，在对应 Release 建好之前会 404——页面上已写明「404 就去全部版本下载正式版」。发布 1.1.3.42 时记得把 `testbuild/zhishui-1.1.3.42.apk` 传到该 Release，否则官网的「下载 APK」是空的。
