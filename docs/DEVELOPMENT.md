@@ -1364,6 +1364,18 @@ function openPolicy(jumpText) { ... }   // 按 h4 文案定位，滚到标题上
 
 **验证方法**：不靠肉眼——用 `Range.selectNodeContents()` 取每行左右两个文本节点的矩形中心做差，修前 `+1.0px`、修后 `-0.1px`。**版本 1.1.3.38 / versionCode 49**。
 
+**1.1.3.39 加固隐私政策门槛**：用户问「这个弹层应该不能下滑/点外面关掉吧」——核对结论：三条路本来就挡着（`showSheet(sel,true)` 置 `__sheetLocked`；遮罩点击、下拉关闭、返回键都先判它）。但发现一处薄弱：`showSheet()` 在**切换到另一个弹层**时不检查锁定态，只有 `openLogin()` 自己判了；也就是说任何漏判的 `showSheet` 都能把门槛顶掉，用户在没同意的情况下直接进主界面。
+
+补了一条全局守卫：`if (__sheetLocked && curSheet && curSheet !== sh) return;`——锁定态只能由 `hideSheet(true)` 解除，而那是「同意/不同意」两个按钮才走的路。
+
+**实测**（headless 里直接调各路径）：
+- 点遮罩 → `policy`（不关）
+- 系统返回键 → `policy`，`__onBack()` 返回 `true`（被吞掉，应用不退出）
+- `showSheet('#loginSheet')` 强行顶替 → 仍是 `policy`
+- `hideSheet(true)` → 正常关闭（同意路径未被误伤）
+
+**版本 1.1.3.39 / versionCode 50**，仅本地提交，未推送。
+
 **版本 1.1.3.36 / versionCode 47**，仅本地提交，未推送。
 
 ---

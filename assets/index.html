@@ -2419,6 +2419,11 @@ function showSheet(sel, locked) {
     document.body.style.overflow = 'hidden';
     return;
   }
+  /* 锁定态（隐私政策门槛）不许被别的弹层顶掉：否则一个漏了判断的
+     showSheet 就能把门槛换走，用户在没同意的情况下进了主界面。
+     要换必须显式 hideSheet(true)，那是「同意/不同意」两个按钮才走的路。 */
+  const curSheet = document.querySelector('.sheet.on');
+  if (__sheetLocked && curSheet && curSheet !== sh) return;
   /* 换到另一个弹层：先把旧的摘掉（不关遮罩），避免两个同时带 .on
      导致前一个的滑出动画和新一个的滑入叠在一起 */
   document.querySelectorAll('.sheet.on').forEach(s => {
