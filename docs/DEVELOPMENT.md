@@ -1492,3 +1492,81 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 - 其他静态托管（含 WorkBuddy 发布）：直接把 `site/` 目录作为根目录上传即可。
 
 **未完成**：站内下载按钮指向 `releases/download/v<版本>/<apk>`，在对应 Release 建好之前会 404——页面上已写明「404 就去全部版本下载正式版」。发布 1.1.3.42 时记得把 `testbuild/zhishui-1.1.3.42.apk` 传到该 Release，否则官网的「下载 APK」是空的。
+
+## 15. 云服务：官网问题反馈（1.1.4 之后）
+
+官网原本是纯静态站——三个页面、一份配置、没有一处需要保存数据。所以第一次被要求「给官网开云服务」时，判断是**先别开**：开出来的是一个没人调用的空环境。真正需要服务端的只有一件事：**让没有 GitHub 账号的人也能提反馈**。
+
+### 15.1 为什么是这张表
+
+| 需求 | 决定 |
+| --- | --- |
+| 谁能提交 | 任何人，不登录（同学大多没有 GitHub 账号） |
+| 谁能读 | **前端一律不能**，只有开发者通过后台看 |
+| 存什么 | 正文、可选联系方式、类型、版本号、来源页、User-Agent |
+| 存多久 | 处理完不超过 12 个月 |
+
+对应 `public.feedback`，没有 `owner_id`——匿名提交没有身份可言，硬塞一个假的 owner 只会让后续权限判断失真。
+
+```sql
+CREATE TABLE feedback (
+  id          BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  kind        TEXT        NOT NULL DEFAULT 'issue' CHECK (kind IN ('issue','suggest','other')),
+  content     TEXT        NOT NULL CHECK (char_length(content) BETWEEN 5 AND 2000),
+  contact     TEXT        CHECK (contact IS NULL OR char_length(contact) <= 120),
+  app_version TEXT        CHECK (app_version IS NULL OR char_length(app_version) <= 32),
+  page        TEXT        CHECK (page IS NULL OR char_length(page) <= 200),
+  ua          TEXT        CHECK (ua IS NULL OR char_length(ua) <= 300),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+)
+```
+
+长度限制写在表上而不是只写在前端：前端校验挡君子，CHECK 约束挡任何人。
+
+### 15.2 权限：只给 INSERT，不给 SELECT
+
+```sql
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY
+GRANT INSERT ON TABLE public.feedback TO authenticated, anon
+CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, anon WITH CHECK (true)
+```
+
+**没有 SELECT 策略**——这就是「客户端读不到任何一条」的实现方式，不是靠前端不写查询语句。`GRANT` 与策略是两道独立的门，少一道就 42501，所以两条都写了。
+
+### 15.3 前端接入
+
+官网没有构建步骤，用 SDK 的 **CDN 形式**（`index.global.js` + `WorkBuddyCloud` 全局），不为了一个表单引入 npm 与打包器。`endpoint` / `publishableKey` 全部来自激活时返回的 `publicConfig`，不写死域名、不从 `location` 推导——服务端按 Origin 精确匹配，写错就整页提交失败。
+
+插入**不链 `.select()`**：这张表对前端没有读权限，链上去反而会因 `return=representation` 需要 SELECT 而失败。成功与否只看 `error`。
+
+错误分支按码分流而不是统一「提交失败」：
+
+| 情况 | 提示 |
+| --- | --- |
+| `42501` | 权限策略拒绝，属于本页配置问题，引导去 GitHub Issues |
+| `23514` | 长度不符合约束 |
+| `42P01` | 服务端缺表 |
+| 网络层 throw | 明确说「没送出去」并给重试/备用路径 |
+
+### 15.4 验证记录
+
+| 项 | 结果 |
+| --- | --- |
+| 线上域名下插入（真实 Origin） | `INSERT_OK`，读回 `id=1`、字段齐全 |
+| 匿名读取 | 返回**空数组**，未泄露任何行 |
+| 真实表单 UI 端到端提交 | `FORM_SUBMITTED`，落库 `kind=issue`、`page=direct`、含联系方式 |
+| 自检数据清理 | 3 行临时记录按 `WHERE` 精确删除，`count(*) = 0` |
+
+验证必须在**线上域名**下跑：服务端按 Origin 精确匹配，`file://` 或 localhost 一律被拒。做法是临时放一个 `cloudcheck.html` 与 `feedbackE2E.html`，部署后跑一遍再覆盖掉。
+
+### 15.5 一个必须记住的部署行为
+
+**部署是覆盖式上传，不会删除服务器上已有的文件。** 本地 `rm cloudcheck.html` 之后重新发布，那个页面仍然在线——而它打开就会往库里插一条。正确做法是**把要下线的页面覆盖成占位页**（`noindex` + 跳首页 + 一句「已移除」），而不是删掉。这次就是踩了这个坑才发现：删完再发布，`/cloudcheck.html` 还是 200。
+
+### 15.6 隐私政策第 16 节与版本号
+
+反馈是官网独有的数据流，应用内没有。所以：
+
+- 官网政策升到 **v2**，只新增第 16 节，1–15 节一字未改，并在页头写明这一点；
+- 应用内 `DISC_VER` 保持 `'1'`——**不因为官网加了一节就逼所有手机用户重读政策**；
+- `site-config.js` 的 `policyVersion` 从此按「站点政策」独立递增，两边共享的 1–15 节改动时才一起加。

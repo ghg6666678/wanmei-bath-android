@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>问题反馈 · 智水</title>
+<meta name="description" content="提交使用中遇到的问题或建议。不需要 GitHub 账号，填写内容会直接存到开发者的反馈列表。">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='26' fill='%232563eb'/%3E%3Cpath d='M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="logo">
+        <svg viewBox="0 0 108 108" width="20" height="20" aria-hidden="true">
+          <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
+          <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
+        </svg>
+      </span>
+      智水
+    </a>
+    <nav class="site">
+      <a href="index.html#features">功能</a>
+      <a href="index.html#download">下载</a>
+      <a href="changelog.html">更新日志</a>
+      <a href="feedback.html">反馈</a>
+      <a href="privacy.html">隐私政策</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+<article class="doc">
+
+  <h1>问题反馈</h1>
+  <p class="pmeta">不需要 GitHub 账号。提交后内容会直接进入开发者的反馈列表，只有开发者能看到。</p>
+
+  <div id="formWrap">
+    <section class="card" style="padding:20px">
+      <form id="fbForm" novalidate>
+
+        <div class="field">
+          <label>反馈类型</label>
+          <div class="chips" id="kindChips">
+            <button type="button" class="chip on" data-kind="issue">遇到问题</button>
+            <button type="button" class="chip" data-kind="suggest">功能建议</button>
+            <button type="button" class="chip" data-kind="other">其他</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="content">具体内容</label>
+          <textarea id="content" maxlength="2000" placeholder="例如：ColorOS 上开了实时活动，锁屏仍然看不到验证码；手机型号、系统版本、哪一步出的问题，写得越具体越好。"></textarea>
+          <div class="count"><span id="cnt">0</span>/2000</div>
+        </div>
+
+        <div class="field">
+          <label for="contact">联系方式（可选）</label>
+          <input type="text" id="contact" maxlength="120" placeholder="邮箱 / QQ / 微信，只在需要向你追问细节时使用">
+          <div class="help">不填也能提交，只是遇到需要确认的情况时没法联系你。</div>
+        </div>
+
+        <div class="note" style="margin:4px 0 16px">
+          请不要在内容里填写<strong>账号密码、短信验证码、身份证号</strong>等敏感信息——反馈以明文存储。
+          表单会一并记录当前版本号、来源页面与浏览器标识（User-Agent），用于判断问题出现在哪台设备上。
+          说明见<a href="privacy.html#s16">隐私政策第 16 节</a>。
+        </div>
+
+        <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary" type="submit" id="fbSubmit">提交反馈</button>
+          <span class="meta" id="fbHint"></span>
+        </div>
+        <div class="formmsg" id="fbMsg" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+  </div>
+
+  <div id="doneWrap" hidden>
+    <section class="card" style="padding:22px">
+      <h3 style="margin:0 0 6px;font-size:16px">已经收到，谢谢</h3>
+      <p style="margin:0;color:var(--ink2);font-size:14px;line-height:1.75" id="doneText">
+        反馈已写入开发者的列表。如果留了联系方式且需要确认细节，会尽量回复你。
+      </p>
+      <div style="display:flex;gap:9px;margin-top:16px;flex-wrap:wrap">
+        <button class="btn ghost" type="button" id="againBtn">再提一条</button>
+        <a class="btn ghost" href="index.html">回首页</a>
+      </div>
+    </section>
+  </div>
+
+  <h2>也可以直接去 GitHub</h2>
+  <p>如果你有 GitHub 账号，在仓库的 Issues 里提问能看到历史记录，也方便别人搜到同样的答案：
+    <a href="https://github.com/ghg6666678/wanmei-bath-android/issues" target="_blank" rel="noopener">项目 Issues</a>。
+    两条路都通向同一个我，选你顺手的就行。</p>
+
+  <p style="margin-top:26px"><a href="index.html">← 返回首页</a></p>
+</article>
+</main>
+
+<footer class="site">
+  <div class="wrap row">
+    <span>© 2026 智水 · 个人项目</span>
+    <a href="changelog.html">更新日志</a>
+    <a href="privacy.html">隐私政策</a>
+    <a href="feedback.html">问题反馈</a>
+    <a href="https://github.com/ghg6666678/wanmei-bath-android" target="_blank" rel="noopener">项目主页</a>
+  </div>
+</footer>
+
+<!-- 云服务 SDK（CDN 形式，本站没有构建步骤） -->
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<script src="site-config.js"></script>
+<script>
+(function () {
+  var S = window.SITE || {};
+  var L = S.latest || {};
+
+  /* 云端配置：endpoint / publishableKey 全部来自激活时返回的 publicConfig，
+     不写死、不从 location 推导。 */
+  var PUBLIC_CONFIG = {
+    endpoint: 'https://zhishui-site.app.workbuddy.host',
+    oauthRelayBaseUrl: 'https://www.workbuddy.cn/v2/as/genie-baas/oauth',
+    publishableKey: 'wbpk_TqUzuRkO7rbqBIQnQmlleM_mREdrABP0Nt9qaKtSyqvDi5o7kf85UGD'
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var kind = 'issue';
+  var busy = false;
+
+  /* 初始化一次，整页复用 */
+  var cloud = null;
+  try {
+    if (window.WorkBuddyCloud && window.WorkBuddyCloud.createWorkBuddyCloud) {
+      cloud = window.WorkBuddyCloud.createWorkBuddyCloud(PUBLIC_CONFIG);
+    }
+  } catch (e) {
+    cloud = null;
+  }
+
+  function setMsg(text, kindCls) {
+    var el = $('fbMsg');
+    el.textContent = text || '';
+    el.className = 'formmsg' + (kindCls ? ' ' + kindCls : '');
+  }
+
+  function count() {
+    var v = $('content').value;
+    $('cnt').textContent = v.length;
+  }
+
+  $('content').addEventListener('input', count);
+
+  $('kindChips').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip');
+    if (!b) return;
+    kind = b.dataset.kind;
+    Array.prototype.forEach.call(this.querySelectorAll('.chip'), function (c) {
+      c.classList.toggle('on', c === b);
+    });
+  });
+
+  function resetForm() {
+    $('content').value = '';
+    $('contact').value = '';
+    kind = 'issue';
+    Array.prototype.forEach.call($('kindChips').querySelectorAll('.chip'), function (c) {
+      c.classList.toggle('on', c.dataset.kind === 'issue');
+    });
+    count();
+    setMsg('');
+  }
+
+  $('againBtn').addEventListener('click', function () {
+    $('doneWrap').hidden = true;
+    $('formWrap').hidden = false;
+    resetForm();
+    $('content').focus();
+  });
+
+  $('fbForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (busy) return;
+
+    var content = $('content').value.trim();
+    var contact = $('contact').value.trim();
+
+    if (content.length < 10) {
+      setMsg('内容再具体一点：至少 10 个字，才够判断问题出在哪。', 'err');
+      $('content').focus();
+      return;
+    }
+    if (content.length > 2000) {
+      setMsg('内容超过 2000 字，请精简后再提交。', 'err');
+      return;
+    }
+    if (!cloud) {
+      setMsg('云服务没能加载（可能是网络拦截了 SDK）。可以刷新重试，或改用上面的 GitHub Issues。', 'err');
+      return;
+    }
+
+    busy = true;
+    $('fbSubmit').disabled = true;
+    $('fbSubmit').textContent = '提交中…';
+    setMsg('');
+
+    /* 不链 .select()：这张表对前端没有读权限，插入成功与否看 error 即可 */
+    cloud.database.from('feedback').insert({
+      kind: kind,
+      content: content,
+      contact: contact || null,
+      app_version: L.version || null,
+      page: (document.referrer && document.referrer.indexOf(location.host) >= 0) ? 'referrer' : 'direct',
+      ua: (navigator.userAgent || '').slice(0, 300)
+    }).then(function (res) {
+      busy = false;
+      $('fbSubmit').disabled = false;
+      $('fbSubmit').textContent = '提交反馈';
+
+      if (res && res.error) {
+        var code = res.error.code ? String(res.error.code) : '';
+        if (code === '42501') {
+          setMsg('提交被服务端拒绝（权限策略）。这是本页的配置问题，不是你的输入有问题——请改用 GitHub Issues，或稍后再试。', 'err');
+        } else if (code === '23514') {
+          setMsg('内容长度不符合要求：正文需在 5–2000 字之间。', 'err');
+        } else if (code === '42P01') {
+          setMsg('反馈表还没准备好（服务端缺表）。请改用 GitHub Issues 反馈。', 'err');
+        } else {
+          setMsg('提交失败：' + (res.error.message || '未知错误') + '。可以重试，或改用 GitHub Issues。', 'err');
+        }
+        return;
+      }
+
+      $('formWrap').hidden = true;
+      $('doneWrap').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }).catch(function (err) {
+      busy = false;
+      $('fbSubmit').disabled = false;
+      $('fbSubmit').textContent = '提交反馈';
+      /* 网络层失败（离线、跨域被拦、代理掐断）也必须有明确提示 */
+      setMsg('网络没能把反馈送出去：' + ((err && err.message) ? err.message : '请求失败') +
+             '。请检查网络后重试，或改用 GitHub Issues。', 'err');
+    });
+  });
+
+  count();
+})();
+</script>
+</body>
+</html>
