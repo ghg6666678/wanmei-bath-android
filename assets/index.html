@@ -671,13 +671,14 @@ input[type=tel]::placeholder{color:var(--ink3)}
      马上要上锁屏」这件事在它真正发生的那一刻说，才有意义。 -->
 <div class="sheet" id="notifyRisk">
   <div class="bar-h"></div>
-  <h3>验证码会显示在锁屏上</h3>
+  <h3>验证码会显示在锁屏和息屏上</h3>
   <div class="hint" style="line-height:1.85;font-size:13px">
-    取码成功后，应用会发一条常驻通知，内容包含<strong>明文验证码</strong>。
-    如果系统允许锁屏显示通知，别人拿到你的手机<strong>不用解锁</strong>就能看到。
+    取码成功后，应用会发一条常驻通知，内容包含<strong>明文验证码</strong>，
+    并请求系统把它提升为“灵动岛”。提升后它不只在锁屏出现，还可能显示在
+    <strong>状态栏胶囊和息屏显示</strong>上——手机放在桌上、没解锁也能被看到。
     <br><br>
-    不想这样：在<strong>系统设置 → 通知 → 本应用</strong>里关掉「锁屏」；
-    或直接关掉「允许通知」，那样锁屏和通知栏都不会显示验证码。
+    不想这样：关掉「实时活动」只会退回普通通知（通知栏里仍有码）；
+    要<strong>彻底不显示</strong>，得关掉「允许通知」。
     <br><br>
     <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见<a href="javascript:void(0)" class="policy-link" onclick="openPolicy('验证码明文显示')">隐私政策第 9 条</a>。</span>
   </div>
@@ -725,9 +726,15 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <p>登录与业务数据不经过开发者服务器，也不向境外提供；仅版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent。</p>
 
     <h4>9. <span class="warn-red">验证码明文显示</span>（重要）</h4>
-    <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>。它是否出现在 <span class="warn-red">锁屏</span> 上取决于系统通知设置：若系统允许本应用在 <span class="warn-red">锁屏</span> 显示通知，他人拿到你的手机<span class="warn-red">无需解锁即可看到验证码并使用</span>。</p>
-    <p>关闭方式：系统设置 → 通知 → 本应用 → 关掉「<span class="warn-red">锁屏</span>」；或关掉「允许通知」，此时 <span class="warn-red">锁屏</span> 与 <span class="warn-red">通知栏</span> 均不显示验证码。应用内「设置 → 验证码显示」也会给出当前状态与说明。</p>
-    <p><span class="warn-red">由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</span>在宿舍等共用环境中，请自行评估是否开启锁屏显示。</p>
+    <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>，并请求系统把它提升为“灵动岛”（ColorOS 称「流体云」，澎湃 OS 叫「实时动态」）。是否提升由系统决定。</p>
+    <p>一旦被提升，验证码不只是出现在<span class="warn-red">通知栏</span>和<span class="warn-red">锁屏</span>上，还可能显示在<span class="warn-red">状态栏胶囊</span>与<span class="warn-red">息屏显示</span>上：手机放在桌上、屏幕熄灭、未解锁时，旁边的人也可能直接看到。这是系统实时活动本来的形态，本应用无法限定它只在哪一层显示。</p>
+    <p>关闭方式（按影响范围从小到大）：</p>
+    <ul>
+      <li>只关普通通知的锁屏显示：系统设置 → 通知 → 本应用 → 关掉「<span class="warn-red">锁屏</span>」</li>
+      <li>不让它上“灵动岛”：关掉「实时活动」开关（ColorOS 叫「流体云显示实时活动」，澎湃 OS 4 叫「实时动态」）。注意：这只是退回<span class="warn-red">普通通知</span>，通知栏里仍有验证码</li>
+      <li>彻底不显示：关掉「允许通知」，此时<span class="warn-red">锁屏</span>、<span class="warn-red">通知栏</span>、<span class="warn-red">息屏</span>都不会出现验证码</li>
+    </ul>
+    <p>应用内「设置 → 验证码显示」会给出当前状态与说明。<span class="warn-red">由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</span>在宿舍等共用环境中，请自行评估是否开启。</p>
 
     <h4>10. 数据安全</h4>
     <p>与平台、CDN 的通信均使用 HTTPS；数据存于应用私有目录，受系统沙箱保护；本应用不保存密码（登录使用短信验证码）；退出登录立即清除登录凭据。</p>
@@ -1508,7 +1515,7 @@ function renderCodeWarn(st, d) {
   const box = $('#warnCode');
   if (!box) return;
   const out = [];
-  out.push('<strong>注意：验证码会明文显示在锁屏和状态栏</strong>，拿到手机的人也能看到。');
+  out.push('<strong>注意：验证码会明文显示在锁屏和状态栏</strong>，开启“灵动岛”后连息屏也能看到，旁边的人不用解锁就能拿走。');
   out.push('关掉「实时活动」只会退回<strong>普通通知</strong>（通知栏里仍有码，锁屏显示与否看系统设置）；'
     + '<strong>要彻底不显示，得关掉「允许通知」</strong>。');
 
