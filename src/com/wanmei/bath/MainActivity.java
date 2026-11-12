@@ -507,13 +507,24 @@ public class MainActivity extends android.app.Activity {
 
         /** 由前端在「前置说明」里点「开启通知」后调用（1.1.3.30）。
             不走 notifyOrderCode 里的自动请求，是为了让风险说明排在系统权限框之前；
-            权限对话框本身必须在主线程弹，所以转一下。 */
+            权限对话框本身必须在主线程弹，所以转一下。
+
+            1.1.3.35：以前这里直接调 requestNotifyPermission()，而那个方法在
+            「问过/拒过」（notifyPermissionDecided）时会静默 return——系统不会再弹
+            框，用户点了「开启通知」却什么都不发生，看起来像按钮坏了。现在分成三路：
+            已有权限 → 什么都不用做；问过但没权限 → 直接送到系统通知设置页；
+            从没问过 → 弹系统框。 */
         @JavascriptInterface
         public void askNotifyPermission() {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    requestNotifyPermission();
+                    if (hasNotifyPermission()) return;
+                    if (notifyPermissionDecided()) {
+                        gotoCodeNotifySettings();
+                    } else {
+                        requestNotifyPermission();
+                    }
                 }
             });
         }
@@ -1015,8 +1026,14 @@ public class MainActivity extends android.app.Activity {
         }
         /* 对话框授权成功也强制刷一次：把首页提示框和「我的」页状态从
            「未开启」更新成「已生效」，不用等用户手动下拉刷新。 */
-        if (ok && web != null) {
-            web.evaluateJavascript("(window.__onShow ? window.__onShow(true) : 0)", null);
+        if (web != null) {
+            if (ok) {
+                web.evaluateJavascript("(window.__onShow ? window.__onShow(true) : 0)", null);
+            } else {
+                /* 被拒也要有反馈：否则用户点完「开启通知」什么都没发生，会以为什么都没发生
+                   （事实是之后不会再有通知，码只在 App 里）。前端负责提示与刷新状态。 */
+                web.evaluateJavascript("(window.__onNotifyDenied ? window.__onNotifyDenied() : 0)", null);
+            }
         }
     }
 
