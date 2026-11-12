@@ -167,6 +167,8 @@ input:focus{border-color:var(--brand)}
 .policy li{margin:3px 0}
 /* 明文通知相关关键词：全应用唯一使用红色的地方，用来把风险从正文里拎出来 */
 .warn-red{color:var(--danger);font-weight:650}
+/* 政策内跳转链接：蓝色下划线，点击打开政策并滚到对应小节 */
+.policy-link{color:var(--brand);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 @media (prefers-color-scheme:dark){ .warn-red{color:#ff7b72} }
 
 .toast{position:fixed;left:50%;top:calc(18px + env(safe-area-inset-top));transform:translate(-50%,-16px);
@@ -677,7 +679,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     不想这样：在<strong>系统设置 → 通知 → 本应用</strong>里关掉「锁屏」；
     或直接关掉「允许通知」，那样锁屏和通知栏都不会显示验证码。
     <br><br>
-    <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见「设置 → 应用 → 隐私政策」。</span>
+    <span style="opacity:.85">继续使用即表示你自行承担被他人看到的风险，详见<a href="javascript:void(0)" class="policy-link" onclick="openPolicy('验证码明文显示')">隐私政策第 9 条</a>。</span>
   </div>
   <div style="display:flex;gap:9px;margin-top:14px">
     <button class="btn ghost" style="flex:1" id="nrGoSet">去系统设置</button>
@@ -699,7 +701,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <h4>2. 我们处理的信息</h4>
     <ul>
       <li>你主动提供：手机号、短信验证码（仅用于换取登录凭据，<strong>短信验证码不保存</strong>）</li>
-      <li>平台返回：登录凭据 token、姓名、学校、学号、水控余额、预约订单、<span class="warn-red">开阀验证码</span></li>
+      <li>平台返回：登录凭据 token、姓名、学校、学号、水控余额、预约订单、开阀验证码</li>
       <li>你创建的：星标楼栋、余额提醒阈值、通知与政策同意状态</li>
       <li>设备与网络：版本号、系统版本、请求时间与结果（用于版本检查与排障）</li>
     </ul>
@@ -723,9 +725,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <p>登录与业务数据不经过开发者服务器，也不向境外提供；仅版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent。</p>
 
     <h4>9. <span class="warn-red">验证码明文显示</span>（重要）</h4>
-    <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>。它是否出现在 <span class="warn-red">锁屏</span> 上取决于系统通知设置：若系统允许本应用在 <span class="warn-red">锁屏</span> 显示通知，他人拿到你的手机<strong>无需解锁即可看到验证码并使用</strong>。</p>
+    <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>。它是否出现在 <span class="warn-red">锁屏</span> 上取决于系统通知设置：若系统允许本应用在 <span class="warn-red">锁屏</span> 显示通知，他人拿到你的手机<span class="warn-red">无需解锁即可看到验证码并使用</span>。</p>
     <p>关闭方式：系统设置 → 通知 → 本应用 → 关掉「<span class="warn-red">锁屏</span>」；或关掉「允许通知」，此时 <span class="warn-red">锁屏</span> 与 <span class="warn-red">通知栏</span> 均不显示验证码。应用内「设置 → 验证码显示」也会给出当前状态与说明。</p>
-    <p><strong>由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</strong>在宿舍等共用环境中，请自行评估是否开启锁屏显示。</p>
+    <p><span class="warn-red">由此产生的费用或其他损失由使用者自行承担，开发者不承担赔偿责任。</span>在宿舍等共用环境中，请自行评估是否开启锁屏显示。</p>
 
     <h4>10. 数据安全</h4>
     <p>与平台、CDN 的通信均使用 HTTPS；数据存于应用私有目录，受系统沙箱保护；本应用不保存密码（登录使用短信验证码）；退出登录立即清除登录凭据。</p>
@@ -1514,7 +1516,8 @@ function renderCodeWarn(st, d) {
      之后，结果全新安装（通知权限还没给）和已经上岛的人根本看不到——用户
      正是照着这一点发现的。责任边界不和状态绑定。 */
   out.push('<span style="opacity:.85">若你选择让验证码显示在锁屏上，被他人看到并使用的风险由你自行承担——'
-    + '详见「设置 → 应用 → 隐私政策」。</span>');
+    + '详见<a href="javascript:void(0)" class="policy-link" '
+    + "onclick=\"openPolicy('验证码明文显示')\">隐私政策第 9 条</a>。</span>");
 
   const off = !!(st && (st.perm === false || st.enabled === false));
   const flagged = !!(d && d.flagged);
@@ -2284,7 +2287,38 @@ $('#rowFare').onclick = () => {
 
 /* 「我的」页的静态入口：停在应用级通知页（母类），实时活动开关就在
    「允许通知」下方；关掉母类时子项会被系统隐藏，所以不能直达子类别。 */
-$('#rowDisc').onclick = () => showSheet('#discSheet');
+/* 打开隐私政策；给了 jumpText 就滚到对应小节（通知里的「第 9 条」链接走这里）。
+   从别的锁定弹层（如场景告知）过来时，先把旧弹层收掉再上，避免两层叠在一起。 */
+function openPolicy(jumpText) {
+  fillPolicy();
+  const opening = () => {
+    showSheet('#discSheet');
+    if (!jumpText) return;
+    const body = $('#discSheetBody');
+    if (!body) return;
+    const go = () => {
+      const hs = body.querySelectorAll('h4');
+      for (let i = 0; i < hs.length; i++) {
+        if (hs[i].textContent.indexOf(jumpText) >= 0) {
+          /* 不能用 offsetTop：它的参照系是最近的定位祖先（这里是 .policy 或 body），
+             不是滚动容器，直接赋值会滚过头。用两者的矩形差换算才准。 */
+          const delta = hs[i].getBoundingClientRect().top - body.getBoundingClientRect().top;
+          body.scrollTop = Math.max(0, body.scrollTop + delta - 6);
+          return;
+        }
+      }
+    };
+    requestAnimationFrame(go);
+    setTimeout(go, 320);   /* 等滑入动画结束再滚一次，否则按旧布局算位置 */
+  };
+  if (document.querySelector('.sheet.on')) {
+    hideSheet(true);
+    setTimeout(opening, 200);
+  } else {
+    opening();
+  }
+}
+$('#rowDisc').onclick = () => openPolicy();
 $('#discClose').onclick = hideSheet;
 
 $('#rowNotify').onclick = () => {
