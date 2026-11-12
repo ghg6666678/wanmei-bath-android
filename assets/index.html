@@ -923,6 +923,15 @@ function verifyExpireAt() {
 }
 function fmtClock(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
+/* 手机号打码：138****8888。只留前 3 后 4，中间固定 4 个星号。
+   顶部副标题用它代替学校名——学校在「我的 → 账号」里已经有了，
+   而手机号能回答「现在登的是哪个号」，比学校更有信息量，又不适合明文露着。 */
+function maskPhone(p) {
+  const s = String(p || '').replace(/\s+/g, '');
+  if (/^\d{11}$/.test(s)) return s.slice(0, 3) + '****' + s.slice(7);
+  return s;   /* 长度异常就原样返回，不做猜测 */
+}
+
 /* 顶部问候语，按【服务端】时间分时段。
    原来这里显示「姓名 · 洗澡」：姓名在「我的 → 账号」里已经有了，标题重复
    一次没有新信息；问候语至少随时间变化，也顺带把时钟校准结果表达出来
@@ -1617,7 +1626,9 @@ function syncHeader() {
   const n = (state.cfg || {}).name;
   /* 顶部格式：服务器下发的姓名 + 问候语，如「张三，晚上好」 */
   $('#hName').textContent = n ? (n + '，' + greeting()) : greeting();
-  $('#hSub').textContent = (state.cfg || {}).school || '';
+  /* 副标题：掩码手机号优先；没有就退回学校名，避免空着一行 */
+  const ph = maskPhone((state.cfg || {}).phone);
+  $('#hSub').textContent = ph || (state.cfg || {}).school || '';
 }
 
 function openSettings() {
