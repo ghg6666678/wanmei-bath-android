@@ -527,10 +527,10 @@ input[type=tel]::placeholder{color:var(--ink3)}
         </div>
         <div class="val"><span id="valVersion">1.0.3</span><i>›</i></div>
       </div>
-      <div class="setrow" id="rowRepo">
+      <div class="setrow" id="rowSite">
         <div class="grow">
-          <div class="name">项目主页</div>
-          <div class="info">源码、全部版本与历史反馈</div>
+          <div class="name">官网</div>
+          <div class="info">下载、更新日志与反馈；源码入口在页脚</div>
         </div>
         <div class="val"><i>›</i></div>
       </div>
@@ -731,7 +731,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.4.7 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
     <p>本政策说明「洗澡助手」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>
@@ -2831,6 +2831,10 @@ $('#btnLogout').onclick = () => {
  * 任何一步失败都不会把用户卡在空白弹窗上：最差也能给出已知版本和手动下载地址。 */
 const APP_VERSION = '1.0.3';        /* 网页端版本；安卓端以安装包里的真实版本为准 */
 const REPO_HOME = 'https://github.com/ghg6666678/wanmei-bath-android';
+/* 官网首页（WorkBuddy 托管）。与 FEEDBACK_URL 同一个站点，同样必须带 sharecode。
+   设置里「官网」这一行、以及以后所有面向用户的入口都指这里；
+   GitHub 仓库只作为更新弹层的退路与官网页脚的「项目主页」存在。 */
+const SITE_URL = 'https://zhishui-site.app.workbuddy.host/?sharecode=KLDDLXOQRD';
 /* 官网反馈页。这个站点用分享码控制访问，链接必须带 sharecode，否则 403；
    所以整条地址写在这里，而不是只写域名。站点换了要同步改这里与 README。 */
 const FEEDBACK_URL = 'https://zhishui-site.app.workbuddy.host/feedback.html?sharecode=KLDDLXOQRD';
@@ -3224,7 +3228,7 @@ function renderUpdate(res) {
       (latest.mirrors || []).forEach(m => alt.appendChild(mkLink(
         (String(m).indexOf('.workbuddy.host') >= 0 ? '官网直下 · ' : '加速节点 · ') + hostOf(m), m)));
     }
-    alt.appendChild(mkLink('项目主页 · 全部版本与反馈', latest.releaseUrl || REPO_HOME));
+    alt.appendChild(mkLink('GitHub · 全部版本与历史反馈', latest.releaseUrl || REPO_HOME));
     /* 网络限制是客观存在的：这里不承诺「点了一定能下」，而是给出可执行的退路。
        之前放过第三方代理镜像，实测会被劫持跳转到无关站点，已全部移除。 */
     const tip2 = document.createElement('div');
@@ -3262,7 +3266,7 @@ function renderUpdate(res) {
 }
 
 $('#rowUpdate').onclick = () => { showSheet('#updSheet'); runUpdateCheck(); };
-$('#rowRepo').onclick = () => openExternal(REPO_HOME);
+$('#rowSite').onclick = () => openExternal(SITE_URL);
 $('#rowFeedback').onclick = () => openExternal(FEEDBACK_URL);
 $('#updClose').onclick = () => hideSheet();
 $('#updRetry').onclick = () => runUpdateCheck();

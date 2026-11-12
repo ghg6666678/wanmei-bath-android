@@ -1,12 +1,12 @@
 {
-  "version": "1.1.4.7",
-  "versionCode": 57,
-  "publishedAt": "2026-11-12T15:35:00Z",
-  "notes": "修复：检查更新里的更新日志可以向左滑动造成偏移——日志块限高滚动时横轴也被设成了可滚动，哈希这类不换行的长串把它撑宽了；现在横向锁死，长内容一律换行\n检查更新新增「官网清单」来源：GitHub 接口与三个 CDN 都连不上时，仍可从本项目官网读到版本信息，不再只能卡在「连不上 GitHub」\n其余改动与 1.1.4.6 相同",
-  "apkName": "zhishui-1.1.4.7.apk",
+  "version": "1.1.5",
+  "versionCode": 58,
+  "publishedAt": "2026-11-12T15:50:00Z",
+  "notes": "设置里的「项目主页」改为「官网」：打开本项目自己的网站（下载、更新日志、问题反馈都在那），\n源码入口移到官网页脚的「项目主页」\n更新弹层的备用链接如实标注「GitHub · 全部版本与历史反馈」，不再把 GitHub 仓库叫「项目主页」\n其余功能与 1.1.4.7 相同",
+  "apkName": "zhishui-1.1.5.apk",
   "mirrors": [
-    "https://zhishui-site.app.workbuddy.host/zhishui-1.1.4.7.apk?sharecode=KLDDLXOQRD",
-    "https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.7/release/zhishui-1.1.4.7.apk",
-    "https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.7/release/zhishui-1.1.4.7.apk"
+    "https://zhishui-site.app.workbuddy.host/zhishui-1.1.5.apk?sharecode=KLDDLXOQRD",
+    "https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk",
+    "https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk"
   ]
 }

@@ -671,6 +671,7 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 | **1.1.4.5** | `zhishui-1.1.4.5.apk` | 103,315 B | **55** |
 | **1.1.4.6** | `zhishui-1.1.4.6.apk` | 103,315 B | **56** |
 | **1.1.4.7** | `zhishui-1.1.4.7.apk` | 107,411 B | **57** |
+| **1.1.5** | `zhishui-1.1.5.apk` | 107,411 B | **58** |
 
 早期四个版本的 Release 已发布并附带 APK 与发布说明；两个仓库的 `main` 与版本标签一致。README 里另有「适用范围与其他学校」章节，仓库配有 issue 模板用于收集跨校适配反馈。
 
@@ -1554,6 +1555,20 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 顺带确认：`apkUrl` 不在清单里也没关系，`withDownload()` 会按 `version` + `apkName` 拼出 GitHub Release 直链。
 
 **版本 1.1.4.7 / versionCode 57**。
+
+### 12.27 「项目主页」让位给官网（1.1.5）
+
+项目早期只有 GitHub 仓库，「项目主页」就是仓库页——名字和事实一致。后来有了真正的官网（下载、更新日志、反馈都在站上），再让设置里那一行叫「项目主页」并打开 GitHub，就成了**名不副实**：普通用户点进去看到的是代码列表，不是「主页」。
+
+改动：
+
+1. `rowRepo` 整行换成 `rowSite`：名称「官网」，说明「下载、更新日志与反馈；源码入口在页脚」，点击 `openExternal(SITE_URL)` 打开**官网首页**（带 sharecode 的完整地址，与 `FEEDBACK_URL` 同一站点）。
+2. `REPO_HOME` 保留，但只服务更新弹层：`releaseUrl` 缺失时的兜底、备用清单那条链接。后者标签从「项目主页 · 全部版本与反馈」改成「**GitHub · 全部版本与历史反馈**」——它打开的确实是 GitHub Releases 页，标签如实。
+3. GitHub 源码入口不消失，只是**降级**：官网页脚的「项目主页」指向仓库。想看代码的人找得到，不想看的人不再被推给代码页。
+
+这也是 12.24 那条教训的延续：官网上线后，「应用里哪些地方还把 GitHub 当唯一入口」值得整体过一遍，而不是每次漏一处补一处。
+
+**版本 1.1.5 / versionCode 58**，政策文本未动（`DISC_VER` 仍是 `2`，老用户不会被迫重读）。
 
 ## 13. 小结
 
