@@ -505,6 +505,19 @@ public class MainActivity extends android.app.Activity {
             gotoCodeNotifySettings();
         }
 
+        /** 由前端在「前置说明」里点「开启通知」后调用（1.1.3.30）。
+            不走 notifyOrderCode 里的自动请求，是为了让风险说明排在系统权限框之前；
+            权限对话框本身必须在主线程弹，所以转一下。 */
+        @JavascriptInterface
+        public void askNotifyPermission() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    requestNotifyPermission();
+                }
+            });
+        }
+
         /** 用户点过「知道了」就不再提示锁屏设置。存原生，file:// 下 localStorage 不可靠。 */
         @JavascriptInterface
         public String getNotifyHintDismissed() {

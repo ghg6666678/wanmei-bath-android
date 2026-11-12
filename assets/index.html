@@ -667,6 +667,28 @@ input[type=tel]::placeholder{color:var(--ink3)}
 </div>
 
 <!-- 检查更新 -->
+<!-- 申请通知权限之前的前置告知（1.1.3.30）：
+     以前是 JS 直接把码交给原生，原生发现没权限就弹系统框——用户还不知道
+     这条通知会把明文验证码送到锁屏和息屏上。现在没权限时先讲清楚，由用户
+     决定要不要申请；不给权限不影响取码。 -->
+<div class="sheet" id="notifyPermAsk">
+  <div class="bar-h"></div>
+  <h3>先说明：验证码会显示在锁屏和息屏上</h3>
+  <div class="hint" style="line-height:1.85;font-size:13px">
+    下一步会申请「通知」权限。开启后，取码成功时会发一条常驻通知，内容包含
+    <span class="warn-red">明文验证码</span>，并请求系统把它提升为“灵动岛”。
+    提升后它可能出现在<span class="warn-red">状态栏胶囊</span>、<span class="warn-red">锁屏</span>
+    和<span class="warn-red">息屏显示</span>上——手机放在桌上、没有解锁，旁边的人也可能看到。
+    <br><br>
+    不想这样也没关系：<strong>不给通知权限不影响取码</strong>，验证码在 App 内照常查看。
+    以后想开，在系统设置 → 通知 → 本应用里打开即可。
+  </div>
+  <div style="display:flex;gap:9px;margin-top:14px">
+    <button class="btn ghost" style="flex:1" id="nrpSkip">暂不开启</button>
+    <button class="btn" style="flex:1.4" id="nrpAllow">开启通知</button>
+  </div>
+</div>
+
 <!-- 一次性的场景告知（1.1.3.26）：通用免责声明在启动时同意，但「验证码
      马上要上锁屏」这件事在它真正发生的那一刻说，才有意义。 -->
 <div class="sheet" id="notifyRisk">
@@ -1139,6 +1161,13 @@ function notifySetupHint() {
    1.1.3.13：码会明文显示在锁屏上这件事，现在写在「我的」页「验证码显示」
    分区和首次提示框里（用户看得见），不再只留在这段注释里；也不再由代码
    替用户下风险结论。不想显示就关掉应用级「允许通知」，实测有效。 */
+/* 读一次通知状态。syncLockScreenCode 每渲染一次就会问一次，代价很小（本地桥）。 */
+function notifyStateNow() {
+  const nat = __native();
+  if (!nat || !nat.notifyStatus) return null;
+  try { return JSON.parse(String(nat.notifyStatus() || '{}')); } catch (e) { return null; }
+}
+
 function syncLockScreenCode() {
   const nat = __native();
   if (!nat) return;                       /* 浏览器里没有原生桥，直接跳过 */
@@ -1150,6 +1179,18 @@ function syncLockScreenCode() {
       return;
     }
     if (!nat.showOrderCode) return;
+
+    /* 1.1.3.30：没有通知权限时【不再】把码交给原生——那样原生会立刻弹系统
+       权限框，用户还没被告知这条通知会把明文验证码送到锁屏和息屏上。
+       改成先弹一次前置说明，由用户决定；「暂不开启」就静默不发，取码照常
+       在 App 内查看。权限后来被打开时，回前台的那次 renderOrder 会自动补发。 */
+    const st = notifyStateNow();
+    if (st && st.perm === false) {
+      if (!notifyRiskAcked() && !document.querySelector('.sheet.on')) {
+        showSheet('#notifyPermAsk', true);
+      }
+      return;
+    }
     /* 传绝对失效时刻（已按服务端校准），原生侧用它渲染倒计时并定时消失。
        多个预约时以第一个为主，标题里带上总数，免得用户以为只有这一个。 */
     const more = state.orders.length > 1 ? ` · 共 ${state.orders.length} 个` : '';
@@ -1464,6 +1505,18 @@ $('#nrGoSet').onclick = () => {
   hideSheet(true);
   const nat = __native();
   if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
+};
+/* 前置说明的两个出口：开启 → 走系统权限框；暂不开启 → 静默不发，也不反复问 */
+$('#nrpAllow').onclick = () => {
+  setNotifyRiskAck(true);
+  hideSheet(true);
+  const nat = __native();
+  if (nat && nat.askNotifyPermission) { try { nat.askNotifyPermission(); } catch (e) { } }
+};
+$('#nrpSkip').onclick = () => {
+  setNotifyRiskAck(true);
+  hideSheet(true);
+  toast('已跳过：验证码仍可在 App 内查看');
 };
 
 function renderNotifyState() {
