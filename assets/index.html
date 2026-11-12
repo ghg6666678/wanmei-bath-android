@@ -12,6 +12,9 @@
   --bg:#f4f6fb; --card:#fff; --ink:#101828; --ink2:#667085; --ink3:#98a2b3;
   --line:#eaecf0; --brand:#2563eb; --brand2:#38bdf8; --ok:#12b76a; --warn:#f79009; --danger:#f04438;
   --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px -12px rgba(16,24,40,.18);
+  /* 预约卡描边：浅色直接用品牌色；深色单独压暗（见下方 dark 覆盖），
+     否则 2px 的亮蓝在深底上会跳出来抢视线。 */
+  --edge-a:var(--brand); --edge-b:var(--brand2);
   --code-bg:rgba(16,24,40,.06);
   --r:18px;
 }
@@ -19,7 +22,9 @@
   :root{ --bg:#0b1220; --card:#141b2d; --ink:#f2f5fa; --ink2:#98a4b8; --ink3:#6b7891;
     --line:#212b42; --brand:#4f8dff; --brand2:#2dd4bf;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -16px rgba(0,0,0,.8);
-    --code-bg:rgba(255,255,255,.07); }
+    --code-bg:rgba(255,255,255,.07);
+    /* 实色压暗，而不是加 alpha：半透明叠在页面底色上会让描边发灰、边缘发虚 */
+    --edge-a:#3a6fc4; --edge-b:#2a9b93; }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -75,7 +80,7 @@ main{padding:4px 16px 8px;display:flex;flex-direction:column;gap:14px}
    边框区域透出外层——圆角和阴影都不受影响。 */
 .order{position:relative;overflow:hidden;border:2px solid transparent;
   background:linear-gradient(var(--card),var(--card)) padding-box,
-             linear-gradient(135deg,var(--brand),var(--brand2)) border-box}
+             linear-gradient(135deg,var(--edge-a),var(--edge-b)) border-box}
 .order .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .order h2{margin:0;font-size:18px;font-weight:650}
 .meta{font-size:12.5px;color:var(--ink2);margin-top:4px;display:flex;flex-direction:column;gap:2px}
