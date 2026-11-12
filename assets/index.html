@@ -40,6 +40,12 @@ header{
 .brand{display:flex;align-items:center;gap:10px}
 .logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));
   display:grid;place-items:center;color:#fff;font-weight:700;font-size:16px;box-shadow:var(--shadow)}
+/* 设置二级页的返回键：默认不占位，进设置时把 logo 换掉 */
+.hback{display:none;width:34px;height:34px;border:0;padding:0;border-radius:11px;background:transparent;
+  color:var(--ink);align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hback.on{display:flex}
+.hback:active{background:rgba(127,127,127,.14)}
+.hback svg{width:23px;height:23px}
 h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
 .sub{font-size:12px;color:var(--ink2);margin-top:1px}
 main{padding:4px 16px 8px;display:flex;flex-direction:column;gap:14px}
@@ -261,11 +267,11 @@ input[type=text]:disabled{opacity:.45}
 .monthpick:active{background:rgba(37,99,235,.16)}
 /* 记录页标题行带胶囊按钮，需要比默认（负边距）更宽松的间距，否则会贴到卡片上 */
 /* 内页（记录/我的）的标题不在 main 的 flex 流里，拿不到 gap，需自带宽间距 */
-#pageRec .sec-title, #pageMe .sec-title{margin:2px 4px 12px}
+#pageRec .sec-title, #pageMe .sec-title, #pageSet .sec-title{margin:2px 4px 12px}
 /* 说明文字与下一个分区标题之间留出间隔，否则会贴在一起 */
-#pageMe .tipnote + .sec-title{margin-top:14px}
+#pageMe .tipnote + .sec-title, #pageSet .tipnote + .sec-title{margin-top:14px}
 /* 卡片后面接的分区标题同样需要间隔 */
-#pageMe section.card + .sec-title{margin-top:14px}
+#pageMe section.card + .sec-title, #pageSet section.card + .sec-title{margin-top:14px}
 .spin{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;
   border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:-3px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -344,9 +350,15 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <header>
   <div class="brand">
+    <!-- 二级页（设置）的返回键：进设置时替换掉 logo，标题写「设置」。
+         放在 sticky 的 header 里，页面滚到多深都能退回来。 -->
+    <button class="hback" id="hBack" aria-label="返回">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
     <!-- 和桌面图标同一个水滴：把 ic_launcher_fg.xml 的矢量按 1:1 搬进来，
          不再用一个「浴」字当占位。渐变底由 .logo 提供，这里只画白色水滴。 -->
-    <div class="logo">
+    <div class="logo" id="hLogo">
       <svg viewBox="0 0 108 108" width="26" height="26" aria-hidden="true">
         <path fill="#fff" d="M54,20 C54,20 33,48 33,67 A21,21 0 0,0 75,67 C75,48 54,20 54,20 Z"/>
         <path fill="#4FC3F7" fill-opacity=".55" d="M45,58 C45,50 50,42 54,36 C58,42 62,50 62,58 A8.5,8.5 0 0,1 45,58 Z"/>
@@ -393,8 +405,34 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <section class="card" id="recList"><div class="empty">加载中…</div></section>
   </div>
 
-  <!-- 我的 -->
+  <!-- 我的：只回答两个问题——「我是谁」和「去哪设置」。
+       消费限制 / 余额提醒 / 验证码显示 / 应用 全部挪进二级页 #pageSet（1.1.3.20）。 -->
   <div id="pageMe" class="hidden">
+    <div class="sec-title"><h3>账号</h3></div>
+    <section class="card">
+      <div class="rec"><span>姓名</span><span class="r" id="meName">—</span></div>
+      <div class="rec"><span>学号</span><span class="r" id="meId">—</span></div>
+      <div class="rec"><span>学校</span><span class="r" id="meSchool">—</span></div>
+      <div class="rec"><span>手机号</span><span class="r" id="mePhone">—</span></div>
+      <div class="rec"><span>登录态</span><span class="r" id="meToken">—</span></div>
+      <button class="btn ghost" style="width:100%;margin-top:14px" id="btnLogout">退出登录</button>
+    </section>
+    <div class="tipnote">登录态失效时会自动弹出登录框，用手机号重新验证即可。</div>
+
+    <section class="card" style="margin-top:14px">
+      <div class="setrow" id="rowSettings">
+        <div class="grow">
+          <div class="name">设置</div>
+          <div class="info">消费限制、余额提醒、验证码显示、检查更新</div>
+        </div>
+        <div class="val"><i>›</i></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 设置（二级页）：从「我的」进入。顶栏自动换成返回键 + 标题「设置」，
+       所以这里不再自带页面标题，避免和顶栏重复。 -->
+  <div id="pageSet" class="hidden">
     <div class="sec-title"><h3>消费限制</h3></div>
     <section class="card">
       <div class="setrow" id="rowTime">
@@ -439,25 +477,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
     </section>
     <div class="warnbox" style="margin:10px 4px 14px">
       <strong>注意：验证码会明文显示在锁屏和状态栏</strong>，拿到手机的人也能看到。<br>
-      不想显示，关掉「允许通知」或「实时活动」开关即可。
+      关掉「实时活动」只会退回<strong>普通通知</strong>（通知栏里仍有码，锁屏显示与否看系统设置）；
+      <strong>要彻底不显示，得关掉「允许通知」</strong>。
     </div>
-
-    <div class="sec-title"><h3>账号</h3></div>
-    <section class="card">
-      <div class="rec"><span>姓名</span><span class="r" id="meName">—</span></div>
-      <div class="rec"><span>学号</span><span class="r" id="meId">—</span></div>
-      <div class="rec"><span>学校</span><span class="r" id="meSchool">—</span></div>
-      <div class="rec"><span>手机号</span><span class="r" id="mePhone">—</span></div>
-      <div class="rec"><span>登录态</span><span class="r" id="meToken">—</span></div>
-    </section>
-
-    <div class="sec-title"><h3>登录</h3></div>
-    <section class="card">
-      <div class="hint" style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:12px">
-        登录态失效时会自动弹出登录框，用手机号重新验证即可。
-      </div>
-      <button class="btn ghost" style="width:100%" id="btnLogout">退出登录</button>
-    </section>
 
     <div class="sec-title"><h3>应用</h3></div>
     <section class="card">
@@ -922,7 +944,7 @@ function notifySetupHint() {
 
   const buttons = '<div style="display:flex;gap:7px;margin-top:10px">'
     + '<button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>'
-    + '<button class="btn sm" style="flex:1" id="btnNotifyFix">去设置</button>'
+    + '<button class="btn sm" style="flex:1" id="btnNotifyFix">去系统设置</button>'
     + '</div>';
   const openBox = '<div class="warnbox" id="notifyHintBox" '
     + 'style="margin:12px 16px 16px;line-height:1.8">';
@@ -1302,6 +1324,46 @@ function renderMe() {
   renderNotifyState();
 }
 
+/* ---------- 设置二级页 ----------
+   1.1.3.20：「我的」只留账号信息 + 一个「设置」入口，其余全挪进来。
+   用独立的 #pageSet 而不是弹层：选项多、要能滚动、顶栏还要能换成返回键。
+   顶栏文案统一走 syncHeader()，背景刷新（loadAll）也不会把「设置」标题刷掉。 */
+let __setOpen = false;
+
+function syncHeader() {
+  if (__setOpen) { $('#hName').textContent = '设置'; $('#hSub').textContent = ''; return; }
+  const n = (state.cfg || {}).name;
+  /* 顶部格式：服务器下发的姓名 + 问候语，如「张三，晚上好」 */
+  $('#hName').textContent = n ? (n + '，' + greeting()) : greeting();
+  $('#hSub').textContent = (state.cfg || {}).school || '';
+}
+
+function openSettings() {
+  __setOpen = true;
+  $('#pageMe').classList.add('hidden');
+  $('#pageSet').classList.remove('hidden');
+  $('#hLogo').classList.add('hidden');
+  $('#hBack').classList.add('on');
+  syncHeader();
+  renderMe();           /* 补齐各行当前值（阈值、版本号） */
+  renderNotifyState();  /* 通知状态每次都重读，别用上次的缓存 */
+  window.scrollTo(0, 0);
+}
+
+function closeSettings() {
+  if (!__setOpen) return;
+  __setOpen = false;
+  $('#pageSet').classList.add('hidden');
+  $('#pageMe').classList.remove('hidden');
+  $('#hBack').classList.remove('on');
+  $('#hLogo').classList.remove('hidden');
+  syncHeader();
+  window.scrollTo(0, 0);
+}
+
+$('#hBack').onclick = closeSettings;
+$('#rowSettings').onclick = openSettings;
+
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
                                       '"': '&quot;', "'": '&#39;'}[c]));
@@ -1358,8 +1420,7 @@ async function loadAll() {
       state.serverCalibrated = false;
       $('#srvTime').textContent = '服务器时间未知 · 按本机时间估算';
     }
-    $('#hName').textContent = greeting();
-    $('#hSub').textContent = state.cfg.school || '';
+    syncHeader();
     renderBalance(); renderOrder(); renderRooms(); renderMe();
     scheduleRecPrefetch();          /* 会话已热，顺手把记录页的当前月拉下来 */
   } catch (e) {
@@ -1390,6 +1451,8 @@ async function loadAll() {
       $('#balNum').textContent = '—';
       $('#hName').textContent = greeting();
       $('#hSub').textContent = '';
+      /* 掉回登录态时如果还停在设置里，等于停在一个空账号的设置页——先退回去 */
+      if (__setOpen) closeSettings();
       /* 登录态失效：先给一条明确提示，再弹登录框，避免打开 App 不知道发生了什么 */
       if (!__autoLoginShown) {
         __autoLoginShown = true;
@@ -2128,8 +2191,11 @@ document.querySelectorAll('nav button').forEach(b => {
   b.onclick = () => {
     document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
     const tab = b.dataset.tab;
+    /* 停在设置页时直接切 tab：先退回「我的」，再按目标 tab 显示 */
+    if (__setOpen) closeSettings();
     $('#pageRec').classList.toggle('hidden', tab !== 'rec');
     $('#pageMe').classList.toggle('hidden', tab !== 'me');
+    $('#pageSet').classList.add('hidden');
     document.querySelector('main').children[0].classList.toggle('hidden', tab !== 'home');
     $('#orderCard').classList.toggle('hidden', tab !== 'home' || !state.orders.length);
     document.querySelector('.sec-title').style.display = tab === 'home' ? '' : 'none';
@@ -2757,6 +2823,8 @@ $('#updRetry').onclick = () => runUpdateCheck();
 /* Android 返回键：先关弹层，再回首页，最后退出 */
 window.__onBack = function () {
   if (document.querySelector('.sheet.on')) { hideSheet(); return true; }
+  /* 设置是二级页：返回键先退回「我的」，比直接跳首页更符合层级直觉 */
+  if (__setOpen) { closeSettings(); return true; }
   const cur = document.querySelector('nav button.on');
   if (cur && cur.dataset.tab !== 'home') {
     const h = document.querySelector('nav button[data-tab="home"]');
