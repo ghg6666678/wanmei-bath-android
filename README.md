@@ -32,7 +32,7 @@ https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishu
 https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk
 ```
 
-- SHA-256 `415b2e44c9af2c73e5fa58afb94a6196c7114fc261fb840831b8de836e0b7bf3`
+- SHA-256 `fd8499b4a0e893cd3c97a8b9c6877693329642118307f2bc4aaf2c1ece21e244`
 - 与历史版本同一张证书，可直接覆盖安装，登录态不会丢
 - 全部版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
 
