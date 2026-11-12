@@ -676,17 +676,22 @@ public class MainActivity extends android.app.Activity {
         return o.toString();
     }
 
-    /** 锁屏到底会不会把通知内容露出来（1.1.3.21）。
-        读两个 Settings.Secure 开关：
-          lock_screen_show_notifications          —— 锁屏是否显示通知
-          lock_screen_allow_private_notifications —— 锁屏是否显示「敏感内容」
-        这两个键在 AOSP 上可读，但部分 ROM 会限制或干脆不写，所以用 -1 表示
-        「读不到」；前端拿到 canRead=false 时改说「如果你开了…」的说明，不硬猜。
+    /** 锁屏到底会不会把通知内容露出来（1.1.3.21 引入，1.1.3.22 修正语义）。
 
-        还要说明一个我们自己造成的因素：本应用通知的 visibility 是 PUBLIC
-        （为了确保验证码不被系统打码），按 Android 语义 PUBLIC = 在所有锁屏上
-        完整显示，系统「隐藏敏感内容」对它不起作用。所以 channelVis 也一并带出去，
-        前端才能在「锁屏显示通知开着」时给出准确的警告，而不是含糊其辞。 */
+        【1.1.3.22 的教训】原来把 lock_screen_show_notifications 当成「这个应用的
+        通知会不会上锁屏」，真机实测（ColorOS 16）证明是错的：该键是【系统级】
+        默认值，用户在本应用通知页只开了「允许通知」、没勾「锁屏」时它依然是 1，
+        而通知确实不上锁屏。按应用的那个「锁屏」开关由厂商私有的通知设置保存，
+        没有公开 API 可读。所以现在：
+          systemShow = 1  → 只能说明系统级默认开着，**不能**推出本应用会上锁屏；
+          systemShow = 0  → 系统级关了，可以确定不会显示；
+          读不到          → -1。
+        前端只在 systemShow == 0 时下肯定结论，其余一律说「应用读不到」。
+
+        另外附带本应用自己的因素：通知 visibility 是 PUBLIC（1.1.3.4 起为了让
+        验证码不被系统打码），PUBLIC 语义是「在所有锁屏上完整显示」，所以一旦
+        锁屏真的显示这条通知，系统「隐藏敏感内容」对它无效。channelVis/public
+        一并带出去，前端才能准确措辞。 */
     private JSONObject lockScreenInfo() {
         JSONObject o = new JSONObject();
         try {
@@ -710,13 +715,15 @@ public class MainActivity extends android.app.Activity {
                 }
             } catch (Throwable ignored) { }
             o.put("canRead", show >= 0 || priv >= 0);
-            o.put("show", show == 1);
+            /* systemShow 保留原始三态：-1 读不到 / 0 系统级关闭 / 1 系统级打开 */
+            o.put("systemShow", show);
+            o.put("show", show == 1);       /* 兼容旧字段，含义同 systemShow==1 */
             o.put("private", priv == 1);
             o.put("secure", secure);
             o.put("channelVis", vis);
             o.put("public", vis == android.app.Notification.VISIBILITY_PUBLIC);
         } catch (Throwable e) {
-            try { o.put("canRead", false); } catch (Throwable ignored) { }
+            try { o.put("canRead", false); o.put("systemShow", -1); } catch (Throwable ignored) { }
         }
         return o;
     }

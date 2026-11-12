@@ -1295,10 +1295,8 @@ function renderNotifyState() {
     info.textContent = '验证码正以“灵动岛”显示在锁屏 / 状态栏。';
   } else if (liveCapable) {
     val.textContent = '仅通知栏';
-    /* 普通通知会不会出现在锁屏，取决于系统设置；读到了就直说，读不到就别断言 */
-    info.textContent = (lock && lock.canRead && lock.show)
-      ? '通知能收到，但「实时活动」没开；普通通知会显示在锁屏上，风险见下方说明。点这里去打开。'
-      : '通知能收到，但「实时活动」没开，所以只在通知栏；点这里去打开。';
+    /* 按应用的「锁屏」开关没有公开 API，读不到就不断言，只说风险见下方 */
+    info.textContent = '通知能收到，但「实时活动」没开；锁屏会不会显示取决于系统设置，风险见下方。点这里去打开。';
   } else {
     val.textContent = '通知已开启';
     info.textContent = '本机没有实时活动，验证码按普通通知显示，锁屏能否看到取决于系统设置。';
@@ -1325,20 +1323,21 @@ function renderCodeWarn(st, d) {
   if (off || flagged) { box.innerHTML = out.join('<br>'); return; }
 
   const lock = st && st.lock ? st.lock : null;
-  if (lock && lock.canRead) {
-    if (!lock.show) {
-      out.push('当前系统：<strong>锁屏不显示通知</strong>，验证码要解锁后才看得到。');
-    } else if (lock.public === true) {
-      out.push('当前系统：<strong>锁屏会显示通知内容</strong>。本应用的通知按「公开内容」提交，'
-        + '系统里就算开了「锁屏隐藏通知内容」也挡不住——别人拿到手机不用解锁就能看到验证码。'
-        + (lock.secure ? '' : '（本机还没设锁屏密码，任何人都能解锁。）'));
-    } else {
-      out.push('当前系统：锁屏会显示通知。如果没开「锁屏隐藏通知内容」之类的开关，'
-        + '验证码可能被别人看到。');
-    }
+  /* 1.1.3.22：lock_screen_show_notifications 是【系统级】开关，不是本应用的
+     「锁屏」开关。ColorOS 实测：只开「允许通知」、没勾「锁屏」时它仍是 1，
+     而通知确实不上锁屏。按应用的那个开关是厂商私有的，读不到。
+     所以只有「系统级 = 0」能下肯定结论，其余一律按「读不到」处理。 */
+  const sysOff = !!(lock && lock.canRead && lock.systemShow === 0);
+  if (sysOff) {
+    out.push('当前系统：<strong>系统级锁屏通知已关闭</strong>，验证码只在下拉通知栏里出现。');
   } else {
-    out.push('读不到系统的锁屏设置：如果开了「锁屏显示通知」、又没开「锁屏隐藏通知内容」'
-      + '之类的开关，验证码可能被别人看到；需要解锁才能看到通知的话，安全程度会好一些。');
+    out.push('锁屏会不会显示这条通知，应用读不到（各厂商在本应用的通知设置里还有按应用的「锁屏」开关）。'
+      + '如果锁屏能看到通知、又没开「锁屏隐藏通知内容」之类的开关，验证码可能被别人看到；'
+      + '需要解锁才能看到的话，安全程度会好一些。'
+      + '本应用的通知按「公开内容」提交，一旦真的显示在锁屏上，系统的隐藏开关也挡不住。');
+    if (lock && lock.canRead && lock.secure === false) {
+      out.push('另外，本机还没设置锁屏密码，任何人都能解锁后看到通知。');
+    }
   }
   box.innerHTML = out.join('<br>');
 }
