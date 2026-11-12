@@ -655,6 +655,29 @@ input[type=tel]::placeholder{color:var(--ink3)}
 </div>
 
 <!-- 检查更新 -->
+<!-- 首次启动的免责声明（1.1.3.25）：锁定弹层，读完才能同意。
+     不读完就点不动「同意并继续」——目的是让「已阅读」不是一句空话。 -->
+<div class="sheet" id="discFirst">
+  <div class="bar-h"></div>
+  <h3>免责声明</h3>
+  <div class="hint" id="discBody"
+       style="max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:1.9;font-size:13px">
+    本应用是非官方第三方客户端，与学校及水控服务商无关，也不处理任何支付。<br><br>
+    <strong>验证码会明文显示</strong>：它是否出现在锁屏 / 通知栏，取决于系统通知设置和本应用的通知。
+    在宿舍这类共用环境里，别人可能看到你锁屏上的验证码并抢先使用。<br><br>
+    <strong>由此产生的费用或其他损失，由使用者自行承担，作者不承担赔偿责任。</strong>
+    不接受这个风险，请在系统通知设置里关掉本应用的「锁屏」，或直接关掉「允许通知」，也可以现在选择不同意并退出。<br><br>
+    登录凭据只保存在本机；手机借出、丢失或被破解导致的损失，同样由使用者自行承担。<br><br>
+    本应用不收集、不上传你的账号信息，所有请求直接发往学校的水控服务；但网络环境、设备安全由使用者自行负责。<br><br>
+    以上内容如有变更，会在下次启动时重新征求同意。
+  </div>
+  <div class="tipnote" id="discTip" style="margin:10px 2px 0">请向下滑动读完全文</div>
+  <div style="display:flex;gap:9px;margin-top:12px">
+    <button class="btn ghost" style="flex:1" id="discNo">不同意</button>
+    <button class="btn" style="flex:1.4" id="discYes" disabled>同意并继续</button>
+  </div>
+</div>
+
 <div class="sheet" id="discSheet">
   <div class="bar-h"></div>
   <h3>免责声明</h3>
@@ -1154,6 +1177,29 @@ function setStar(v) {
     else localStorage.removeItem('starDorm');
   } catch (e) { }
 }
+/* 免责声明是否已同意（1.1.3.25）。存原生，理由同 firstRunShown：
+   file:// 下 localStorage 不可靠，而这个标记决定了能不能用，更不能丢。
+
+   存的是【声明版本号】而不是布尔值：改一次条文就把 DISC_VER 加一，
+   老用户的旧版本号对不上，下次启动会重新征求同意——这样弹层里那句
+   「内容变更时会重新征求同意」才是真的，不是空话。 */
+const DISC_VER = '1';
+function discAccepted() {
+  if (typeof Android !== 'undefined' && Android.getDiscAccepted) {
+    try { return Android.getDiscAccepted() === DISC_VER; } catch (e) { }
+  }
+  try { return localStorage.getItem('discAccepted') === DISC_VER; } catch (e) { return false; }
+}
+function setDiscAccepted(v) {
+  if (typeof Android !== 'undefined' && Android.setDiscAccepted) {
+    try { Android.setDiscAccepted(v ? DISC_VER : ''); return; } catch (e) { }
+  }
+  try {
+    if (v) localStorage.setItem('discAccepted', DISC_VER);
+    else localStorage.removeItem('discAccepted');
+  } catch (e) { }
+}
+
 /* 余额提醒阈值（元）。存法与星标楼栋一致：原生优先，浏览器回落 localStorage。
    取值：'off'（关闭）或 '0.5' ~ '10'；空串/非法值回落到默认 5。
    历史包袱：1.1.3.17 之前这个 5 元是写死的（renderBalance 里 Number(v) < 5）。 */
@@ -1343,6 +1389,12 @@ function renderCodeWarn(st, d) {
   out.push('关掉「实时活动」只会退回<strong>普通通知</strong>（通知栏里仍有码，锁屏显示与否看系统设置）；'
     + '<strong>要彻底不显示，得关掉「允许通知」</strong>。');
 
+  /* 这句必须无条件显示：1.1.3.24 把它放在「通知已关闭 / 已上岛」的提前返回
+     之后，结果全新安装（通知权限还没给）和已经上岛的人根本看不到——用户
+     正是照着这一点发现的。责任边界不和状态绑定。 */
+  out.push('<span style="opacity:.85">若你选择让验证码显示在锁屏上，被他人看到并使用的风险由你自行承担——'
+    + '详见「设置 → 应用 → 免责声明」。</span>');
+
   const off = !!(st && (st.perm === false || st.enabled === false));
   const flagged = !!(d && d.flagged);
   if (off || flagged) { box.innerHTML = out.join('<br>'); return; }
@@ -1368,8 +1420,6 @@ function renderCodeWarn(st, d) {
     out.push('不想让锁屏出现验证码：在系统设置 → 通知 → 本应用里关掉「锁屏」开关。');
   }
   /* 只声明事实与责任边界，不替用户关任何开关；完整条文在「应用 → 免责声明」 */
-  out.push('<span style="opacity:.85">若你选择让验证码显示在锁屏上，被他人看到并使用的风险由你自行承担——'
-    + '详见下方「免责声明」。</span>');
   box.innerHTML = out.join('<br>');
 }
 
@@ -2951,7 +3001,45 @@ window.__onShow = function (force) {
    所以这里改成不等待（0ms）：先把引导立起来，400ms 的登录框就会看到
    __sheetLocked 为真而自动排队（__loginPending），等引导关掉再弹。 */
 let __firstRunGuide = false;
-if (!getFirstRunFlag()) {
+
+/* 1.1.3.25：首次启动必须先读完并同意免责声明，之后才轮到校园卡引导。
+   顺序反了会让引导先占住弹层（锁定态），免责声明就弹不出来。 */
+function openFirstDisc() {
+  const body = $('#discBody'), yes = $('#discYes'), tip = $('#discTip');
+  if (!body || !yes) return;
+  const check = () => {
+    /* 留 8px 容差：部分 WebView 的 scrollHeight 会因缩放差一两像素 */
+    const done = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
+    yes.disabled = !done;
+    tip.textContent = done ? '已读完全文，可以同意' : '请向下滑动读完全文';
+    tip.style.color = done ? 'var(--ok)' : '';
+  };
+  body.onscroll = check;
+  requestAnimationFrame(check);
+  showSheet('#discFirst', true);
+  setTimeout(check, 300);   /* 字体/布局稳定后再判一次，避免内容不足一屏时按钮一直灰 */
+}
+$('#discYes').onclick = () => {
+  setDiscAccepted(true);
+  hideSheet(true);          /* 锁定态只能从这里关 */
+  if (!getFirstRunFlag()) {
+    __firstRunGuide = true;
+    setTimeout(openGuide, 280);   /* 等免责声明的下滑动画收得差不多再上引导 */
+  } else if (__loginPending) {
+    __loginPending = false;
+    setTimeout(openLogin, 300);
+  }
+};
+$('#discNo').onclick = () => {
+  /* 不同意就退出，但保留已填过的数据；下次启动仍会强制阅读 */
+  const nat = __native();
+  if (nat && nat.exitApp) { try { nat.exitApp(); return; } catch (e) { } }
+  toast('需要同意后才能使用本应用');
+};
+
+if (!discAccepted()) {
+  openFirstDisc();
+} else if (!getFirstRunFlag()) {
   __firstRunGuide = true;
   openGuide();
 }

@@ -426,6 +426,32 @@ public class MainActivity extends android.app.Activity {
                     .putString("balThresh", v == null ? "" : v).apply();
         }
 
+        /** 免责声明是否已同意（1.1.3.25 起首次启动强制阅读）。
+            存在原生而不是 localStorage：file:// 下后者不可靠，而这个标记
+            决定了能不能进主界面，丢了就等于重新强制一次，必须稳。 */
+        @JavascriptInterface
+        public String getDiscAccepted() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("discAccepted", "");
+        }
+
+        @JavascriptInterface
+        public void setDiscAccepted(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("discAccepted", v == null ? "" : v).apply();
+        }
+
+        /** 「不同意」时退出。JavascriptInterface 跑在 WebView 的桥线程，
+            finish() 必须在主线程调用。 */
+        @JavascriptInterface
+        public void exitApp() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    finish();
+                }
+            });
+        }
+
         /** 首次启动标记：看过一次引导后就不再弹。存原生，file:// 下 localStorage 不可靠。 */
         @JavascriptInterface
         public String getFirstRunFlag() {
