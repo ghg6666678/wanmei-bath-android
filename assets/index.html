@@ -494,6 +494,13 @@ input[type=tel]::placeholder{color:var(--ink3)}
         </div>
         <div class="val"><i>›</i></div>
       </div>
+      <div class="setrow" id="rowDisc">
+        <div class="grow">
+          <div class="name">免责声明</div>
+          <div class="info">验证码明文显示与共用设备的风险说明</div>
+        </div>
+        <div class="val"><i>›</i></div>
+      </div>
     </section>
   </div>
 </main>
@@ -648,6 +655,23 @@ input[type=tel]::placeholder{color:var(--ink3)}
 </div>
 
 <!-- 检查更新 -->
+<div class="sheet" id="discSheet">
+  <div class="bar-h"></div>
+  <h3>免责声明</h3>
+  <div class="hint" style="line-height:1.9;font-size:13px">
+    本应用是非官方第三方客户端，与学校及水控服务商无关，也不处理任何支付。<br><br>
+    <strong>验证码会明文显示</strong>：它是否出现在锁屏 / 通知栏，取决于系统通知设置和本应用的通知。
+    在宿舍这类共用环境里，别人可能看到你锁屏上的验证码并抢先使用。<br><br>
+    <strong>由此产生的费用或其他损失，由使用者自行承担，作者不承担赔偿责任。</strong>
+    不接受这个风险，请在系统通知设置里关掉本应用的「锁屏」，或直接关掉「允许通知」。<br><br>
+    登录凭据只保存在本机；手机借出、丢失或被破解导致的损失，同样由使用者自行承担。<br><br>
+    继续使用本应用，即表示你已阅读并同意以上内容。
+  </div>
+  <div style="display:flex;gap:9px;margin-top:16px">
+    <button class="btn" style="flex:1" id="discClose">我知道了</button>
+  </div>
+</div>
+
 <div class="sheet" id="updSheet">
   <div class="bar-h"></div>
   <h3>检查更新</h3>
@@ -1343,6 +1367,9 @@ function renderCodeWarn(st, d) {
        对这种要读码的场景没什么用，所以更实际的选择是干脆关掉锁屏显示。 */
     out.push('不想让锁屏出现验证码：在系统设置 → 通知 → 本应用里关掉「锁屏」开关。');
   }
+  /* 只声明事实与责任边界，不替用户关任何开关；完整条文在「应用 → 免责声明」 */
+  out.push('<span style="opacity:.85">若你选择让验证码显示在锁屏上，被他人看到并使用的风险由你自行承担——'
+    + '详见下方「免责声明」。</span>');
   box.innerHTML = out.join('<br>');
 }
 
@@ -2086,6 +2113,9 @@ $('#rowFare').onclick = () => {
 
 /* 「我的」页的静态入口：停在应用级通知页（母类），实时活动开关就在
    「允许通知」下方；关掉母类时子项会被系统隐藏，所以不能直达子类别。 */
+$('#rowDisc').onclick = () => showSheet('#discSheet');
+$('#discClose').onclick = hideSheet;
+
 $('#rowNotify').onclick = () => {
   const nat = __native();
   if (nat && nat.openNotifySettings) { try { nat.openNotifySettings(); } catch (e) { } }
