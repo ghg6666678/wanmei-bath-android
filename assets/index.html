@@ -755,13 +755,13 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <p>登录凭据与用户信息以 JSON 存于应用私有目录，保留至你退出登录或卸载；偏好设置保留至你修改或卸载；订单与余额仅作内存缓存。卸载应用即删除全部本地数据。</p>
 
     <h4>6. 第三方</h4>
-    <p>完美校园水控平台（vwater.59wanmei.com、xqh5.17wanxiao.com）：登录与取码请求由你的设备直接发往该平台，由其按自身规则处理；jsDelivr / GitHub（cdn.jsdelivr.net、raw.githubusercontent.com）：版本检查与安装包下载会向其暴露 IP、User-Agent 与请求路径。</p>
+    <p>完美校园水控平台（vwater.59wanmei.com、xqh5.17wanxiao.com）：登录与取码请求由你的设备直接发往该平台，由其按自身规则处理；jsDelivr / GitHub（cdn.jsdelivr.net、raw.githubusercontent.com）：版本检查与安装包下载会向其暴露 IP、User-Agent 与请求路径；官网（zhishui-site.app.workbuddy.host，本应用的官方网站，由 WorkBuddy 云服务托管）：版本清单检查与安装包下载会向其暴露 IP、User-Agent 与请求路径。</p>
 
     <h4>7. 共享、转让与公开披露</h4>
     <p>除依法配合监管或司法机关外，本应用不向任何第三方提供你的个人信息；如未来发生运营主体变更，会提前在本政策与启动弹层中告知并重新取得同意。</p>
 
     <h4>8. 跨境传输</h4>
-    <p>登录与业务数据不经过开发者服务器，也不向境外提供；仅版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent。</p>
+    <p>登录与业务数据不经过开发者服务器，也不向境外提供；版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent；官网的版本清单与安装包下载由境内服务响应，不涉及跨境。</p>
 
     <h4>9. <span class="warn-red">验证码明文显示</span>（重要）</h4>
     <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="warn-red">明文验证码</span>，并请求系统把它提升为“灵动岛”（ColorOS 称「流体云」，澎湃 OS 叫「实时动态」）。是否提升由系统决定。</p>
@@ -1409,7 +1409,7 @@ function setStar(v) {
    存的是【声明版本号】而不是布尔值：改一次条文就把 DISC_VER 加一，
    老用户的旧版本号对不上，下次启动会重新征求同意——这样弹层里那句
    「内容变更时会重新征求同意」才是真的，不是空话。 */
-const DISC_VER = '2';   /* v2：新增第 16 节（官网反馈表单）、第 15 节补反馈渠道 */
+const DISC_VER = '3';   /* v3：第 6 节补官网通信方、第 8 节补境内说明；v2：新增第 16 节（官网反馈表单）、第 15 节补反馈渠道 */
 function discAccepted() {
   if (typeof Android !== 'undefined' && Android.getDiscAccepted) {
     try { return Android.getDiscAccepted() === DISC_VER; } catch (e) { }
