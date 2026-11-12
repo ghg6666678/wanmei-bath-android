@@ -665,8 +665,10 @@ input[type=tel]::placeholder{color:var(--ink3)}
     不想这样也没关系：<strong>不给通知权限不影响取码</strong>，验证码在 App 内照常查看。以后想开，在系统设置 → 通知 → 本应用里打开即可。
   </div>
   <div style="display:flex;gap:9px;margin-top:14px">
+    <!-- 两个选项等权：不给任何一方加主色、也不给更大的宽度。
+         这不是「推荐开启」的场景，而是一个需要用户自己权衡的选择。 -->
     <button class="btn ghost" style="flex:1" id="nrpSkip">暂不开启</button>
-    <button class="btn" style="flex:1.4" id="nrpAllow">开启通知</button>
+    <button class="btn ghost" style="flex:1" id="nrpAllow">开启通知</button>
   </div>
 </div>
 
