@@ -63,7 +63,7 @@ python tools/audit_apk.py --config ../web-app/config.json      # 可选：自检
 
 ## 更多文档
 
-- [开发复盘](docs/DEVELOPMENT.md)：从构想到 1.0.3 的完整流程、关键决策与踩过的坑；协议细节（请求地址、参数、签名规则）不展开，第三方服务条款通常禁止再发布这类资料
+- [开发复盘](docs/DEVELOPMENT.md)：从构想到当前版本的完整流程、关键决策与踩过的坑（含官网、云服务与许可变更）；协议细节（请求地址、参数、签名规则）不展开，第三方服务条款通常禁止再发布这类资料
 - [接口说明](docs/API.md) · [消费记录的分页与缓存策略](docs/RECORDS_CACHE.md) · [贡献说明](CONTRIBUTING.md)
 - [更新日志](https://zhishui-site.app.workbuddy.host/changelog.html?sharecode=KLDDLXOQRD) · [隐私政策](https://zhishui-site.app.workbuddy.host/privacy.html?sharecode=KLDDLXOQRD) · [问题反馈](https://zhishui-site.app.workbuddy.host/feedback.html?sharecode=KLDDLXOQRD)（官网，不用 GitHub 账号也能留言）
 
