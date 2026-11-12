@@ -1376,6 +1376,20 @@ function openPolicy(jumpText) { ... }   // 按 h4 文案定位，滚到标题上
 
 **版本 1.1.3.39 / versionCode 50**，仅本地提交，未推送。
 
+**1.1.3.40 预约卡改成整圈渐变描边**：用户觉得原来「只有顶部一条 3px 渐变」像贴了条胶带。出了四档对比图（现状 / 全框 2px / 1.5px / 1px），用户选 2px。
+
+实现要点：渐变边框**不能用 `border-image`**——它和 `border-radius` 一起会出现直角/锯齿；改用双层 `background` 分色：
+
+```css
+border: 2px solid transparent;
+background: linear-gradient(var(--card),var(--card)) padding-box,
+            linear-gradient(135deg,var(--brand),var(--brand2)) border-box;
+```
+
+内层铺卡片底色（padding box），外层铺渐变（border box），边框区域自然透出外层颜色；圆角、阴影、内部布局都不受影响。原先的 `.order:before` 顶部条已删除。
+
+浅色 / 深色两套主题分别实拍过：边框连续、四角圆滑、内层底色与卡片一致（深色下没有出现「里面一块更亮的方块」这种典型的双背景误用）。**版本 1.1.3.40 / versionCode 51**。
+
 **版本 1.1.3.36 / versionCode 47**，仅本地提交，未推送。
 
 ---
