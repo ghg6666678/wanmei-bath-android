@@ -304,7 +304,18 @@ public class Update {
                 d.put("url", arr[i]);
                 d.put("ok", okFlags[i]);
                 d.put("ms", cost[i]);
-                d.put("kind", (!apk.isEmpty() && i == 0) ? "github" : "cdn");
+                /* 三种来源在界面上要能分开说：GitHub 直链 / 官网直下 / 第三方 CDN。
+                   官网那条是本项目自己的站点（WorkBuddy 托管），国内通常最快，
+                   但它依赖分享码，链接换站点就会失效——所以只认域名，不认整条地址。 */
+                String kind;
+                if (!apk.isEmpty() && i == 0) {
+                    kind = "github";
+                } else if (arr[i].contains(".workbuddy.host")) {
+                    kind = "site";
+                } else {
+                    kind = "cdn";
+                }
+                d.put("kind", kind);
                 out.put(d);
             } catch (Exception ignored) { }
         }

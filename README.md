@@ -25,18 +25,18 @@
 
 ## 下载
 
-最新版 **1.1.4.5**（versionCode 55，103,315 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——两个节点都在 Cloudflare 上，无代理直连实测可下：
+最新版 **1.1.4.6**（versionCode 56，103,315 B）。GitHub 直链在不少移动网络下打不开，用下面的 CDN 地址更稳——两个节点都在 Cloudflare 上，无代理直连实测可下：
 
 ```
-https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.5/release/zhishui-1.1.4.5.apk
-https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.5/release/zhishui-1.1.4.5.apk
+https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.6/release/zhishui-1.1.4.6.apk
+https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.4.6/release/zhishui-1.1.4.6.apk
 ```
 
-- SHA-256 `0ec583cc2a2bd40f027773de4b32ad1955ed3b806561b8572db227cfcbdbe360`
+- SHA-256 `6187378d6613495f3f7e74da21fab07056fd23c8391563008f25d0f7a07853db`
 - 与历史版本同一张证书，可直接覆盖安装，登录态不会丢
 - 全部版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
 
-> 路径里的 `@v1.1.4.5` 固定指向这一版，不会因为仓库更新而变化。发新版时这里的地址会跟着换。
+> 路径里的 `@v1.1.4.6` 固定指向这一版，不会因为仓库更新而变化。发新版时这里的地址会跟着换。
 >
 > 1.1.3.1 ~ 1.1.3.42 是开发期的内部编号，已全部收进 **1.1.4**；对外只作「1.1.3 → 1.1.4」一次变化，详见 [更新日志](site/changelog.html) 与 [docs/DEVELOPMENT.md 12.0](docs/DEVELOPMENT.md)。
 

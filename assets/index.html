@@ -725,7 +725,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.4.5 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.4.6 及以后</strong></p>
     <p>本政策说明「洗澡助手」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>
@@ -830,7 +830,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <span class="spin"></span>
     <div>
       <div class="t">正在检测…</div>
-      <div class="d">依次尝试 GitHub 官方接口与 jsDelivr CDN 清单</div>
+      <div class="d">依次尝试 GitHub 官方接口、官网与 jsDelivr 的版本清单</div>
     </div>
   </div>
   <div class="hint" id="updTip" style="margin:12px 0 0"></div>
@@ -2916,7 +2916,7 @@ async function runUpdateCheck() {
   const st = $('#updState');
   st.className = 'updstate';
   st.innerHTML = '<span class="spin"></span><div><div class="t">正在检测…</div>' +
-    '<div class="d">依次尝试 GitHub 官方接口与 jsDelivr CDN 清单</div></div>';
+    '<div class="d">依次尝试 GitHub 官方接口、官网与 jsDelivr 的版本清单</div></div>';
   $('#updNotes').style.display = 'none';
   $('#updNotes').textContent = '';
   $('#updBtns').innerHTML = '';
@@ -2953,12 +2953,21 @@ function mkLink(label, url) {
   return a;
 }
 
-/* 选下载地址：优先用实测通过的第一个，别让用户点一个已知下不动的链接。
-   原生层在检查更新时已经把每个地址都试过（只取 1 字节），结果在 downloads 里。 */
+/* 选下载地址：在实测通过的地址里挑**最快**的那个。
+   原生层检查更新时已经把每个地址试过一遍（Range 取 1 字节），带回了 ms。
+   原来固定取「第一个通过项」，而下单顺序里 GitHub 永远排第一——国内网络下
+   GitHub 常常 1 字节能通、整包却慢到不成样，于是永远错过更快的官网 / CDN。
+   现在按实测耗时排序；ms 缺失（旧缓存 / 内置清单）时才退回第一个。 */
 function pickDownload(latest) {
   const list = Array.isArray(latest.downloads) ? latest.downloads : [];
   const ok = list.filter(d => d && d.ok && d.url);
-  return ok.length ? ok[0].url : (latest.apkUrl || '');
+  if (!ok.length) return latest.apkUrl || '';
+  const scored = ok.filter(d => typeof d.ms === 'number' && d.ms > 0);
+  if (scored.length) {
+    scored.sort((a, b) => a.ms - b.ms);
+    return scored[0].url;
+  }
+  return ok[0].url;
 }
 
 function downloadApk(latest) {
@@ -3194,9 +3203,11 @@ function renderUpdate(res) {
     lb.className = 'lb';
     lb.textContent = '下载地址';
     alt.appendChild(lb);
-    const dlLabel = d => (d.kind === 'github'
-      ? 'GitHub 直链 · github.com'
-      : '加速节点 · ' + hostOf(d.url));
+    const dlLabel = d => {
+      if (d.kind === 'github') return 'GitHub 直链 · github.com';
+      if (d.kind === 'site') return '官网直下 · ' + hostOf(d.url);
+      return '加速节点 · ' + hostOf(d.url);
+    };
     if (dlOk && dlOk.length) {
       dlOk.forEach(d => alt.appendChild(mkLink(dlLabel(d), d.url)));
     } else if (dlList) {
@@ -3204,7 +3215,8 @@ function renderUpdate(res) {
     } else {
       /* 没有实测数据（旧缓存 / 内置清单），保持原来的列法 */
       if (latest.apkUrl) alt.appendChild(mkLink('GitHub 直链 · github.com', latest.apkUrl));
-      (latest.mirrors || []).forEach(m => alt.appendChild(mkLink('加速节点 · ' + hostOf(m), m)));
+      (latest.mirrors || []).forEach(m => alt.appendChild(mkLink(
+        (String(m).indexOf('.workbuddy.host') >= 0 ? '官网直下 · ' : '加速节点 · ') + hostOf(m), m)));
     }
     alt.appendChild(mkLink('项目主页 · 全部版本与反馈', latest.releaseUrl || REPO_HOME));
     /* 网络限制是客观存在的：这里不承诺「点了一定能下」，而是给出可执行的退路。
@@ -3216,7 +3228,7 @@ function renderUpdate(res) {
       ? '这个网络下所有下载地址都连不上（已逐个实测）。请把上面的 GitHub 直链复制到电脑上下载，再传回手机安装。'
       : (dlOk && dlOk.length
           ? '地址已逐个实测，下面的都能直接打开。'
-          : '以上地址在部分网络下可能打不开。若都失败，把 GitHub 直链复制到电脑上下载，再传回手机安装。');
+          : '以上地址已逐个实测，速度是刚才实测的延迟。国内网络通常「官网直下」最快；若都失败，把 GitHub 直链复制到电脑上下载，再传回手机安装。');
     alt.appendChild(tip2);
     if (latest.sha256) {
       const lb2 = document.createElement('div');
