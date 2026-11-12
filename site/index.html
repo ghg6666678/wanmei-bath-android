@@ -41,7 +41,7 @@
       不需要 root、不需要原版 App。手机号直接登录，预约、取码、上锁屏一条线。
     </p>
     <div class="cta">
-      <a class="btn primary" id="dlPrimary" href="#download">下载 APK</a>
+      <a class="btn primary" id="dlLocal" href="#download" download>下载 APK</a>
       <a class="btn ghost" id="dlMirror" href="#" target="_blank" rel="noopener">CDN 镜像</a>
       <span class="meta" id="dlMeta"></span>
     </div>
@@ -119,12 +119,14 @@
 
   <section class="block" id="download">
     <h2>获取安装包</h2>
-    <p class="sub">GitHub 直连在部分移动网络下可能较慢，下面的镜像走 CDN，通常更快。</p>
+    <p class="sub">「本站直下」就在这个站点上，通常最快；GitHub 直连在部分移动网络下可能打不开，可用 CDN 镜像。</p>
     <div class="cta" style="margin-top:8px">
-      <a class="btn primary" id="dlPrimary2" href="#">下载 APK</a>
+      <a class="btn primary" id="dlLocal2" href="#" download>本站直下</a>
       <a class="btn ghost" id="dlMirror2" href="#" target="_blank" rel="noopener">CDN 镜像</a>
+      <a class="btn ghost" id="dlPrimary2" href="#" target="_blank" rel="noopener">GitHub 直链</a>
       <a class="btn ghost" id="dlAll" href="#" target="_blank" rel="noopener">全部版本</a>
     </div>
+    <p class="meta" style="margin-top:8px">「本站直下」是本页所在服务器上的安装包，点开本站后速度最快；它依赖分享链接的访问凭据，单独把 APK 地址发给别人会打不开，那种情况请用 CDN 镜像。</p>
     <p class="meta" id="dlNote" style="margin-top:12px"></p>
 
     <div class="note warn" style="margin-top:18px">
@@ -203,7 +205,10 @@
   set('dlMeta', (L.version ? 'v' + L.version + ' · ' : '') + kb + (L.date ? ' · ' + L.date : ''));
   set('dlNote', '如果直链 404，说明这个版本还没有发布到 Releases，请点「全部版本」下载当前正式版。');
 
-  ['dlPrimary', 'dlPrimary2'].forEach(function (id) { href(id, dl); });
+  /* 本站直下：相对路径，靠页面本身的访问凭据取文件 */
+  var local = L.localPath ? L.localPath : apk;
+  ['dlLocal', 'dlLocal2'].forEach(function (id) { href(id, local); });
+  ['dlPrimary', 'dlPrimary2'].forEach(function (id) { if (id !== 'dlLocal') href(id, dl); });
   ['dlMirror', 'dlMirror2'].forEach(function (id) { href(id, mirror); });
   href('dlAll', base + '/releases');
   href('footRepo', base);

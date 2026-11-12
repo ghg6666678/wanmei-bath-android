@@ -9,7 +9,10 @@ window.SITE = {
     sizeBytes: 103315,
     date: '2026-11-12',
     apkName: 'zhishui-1.1.4.apk',
-    tag: 'v1.1.4'
+    tag: 'v1.1.4',
+    /* 本站直下：构建时把 APK 复制到 site/ 根目录，下载按钮直接用相对路径。
+       对已打开本站的人（已拿到分享码 cookie）是最快的一条路。 */
+    localPath: 'zhishui-1.1.4.apk'
   },
   /* 政策版本要和 App 内 DISC_VER 对齐：改条文时两边一起 +1 */
   policyVersion: '1',

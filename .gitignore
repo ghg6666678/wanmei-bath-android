@@ -14,3 +14,6 @@ keystore/
 # 系统垃圾
 .DS_Store
 Thumbs.db
+
+# 官网部署时复制进去的安装包（原件在 release/，避免重复入库）
+site/*.apk
