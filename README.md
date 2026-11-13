@@ -4,7 +4,7 @@
 
 > 这是一个 AI coding 项目：作者此前没有相关开发经验，从界面、协议到构建与文档，全程通过与 AI agent 用自然语言交流完成。
 
-**觉得好用？欢迎给仓库点个 [Star](https://github.com/ghg6666678/wanmei-bath-android)。** 如果它帮你省掉了洗澡前那七八次点击，一个 Star 就是最实在的支持，也能让更多被开屏广告折磨的人找到它。另外，[官网](https://zhishui-site.app.workbuddy.host/?sharecode=KLDDLXOQRD#support) 放了一个微信赞赏码：**纯自愿、无对价，不给也照样用，与任何功能无关**。
+**觉得好用？欢迎给仓库点个 [Star](https://github.com/ghg6666678/wanmei-bath-android)。** 如果它帮你省掉了洗澡前那七八次点击，一个 Star 就是最实在的支持，也能让更多被开屏广告折磨的人找到它。另外，[官网](https://yuezao.org/#support) 放了一个微信赞赏码：**纯自愿、无对价，不给也照样用，与任何功能无关**。
 
 ## 下载
 
@@ -15,7 +15,7 @@ https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishu
 https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk
 ```
 
-- 也可从 [官网](https://zhishui-site.app.workbuddy.host/?sharecode=KLDDLXOQRD) 直接下载；全部历史版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
+- 也可从 [官网](https://yuezao.org/) 直接下载；全部历史版本见 [Releases](https://github.com/ghg6666678/wanmei-bath-android/releases)
 - SHA-256 `fd8499b4a0e893cd3c97a8b9c6877693329642118307f2bc4aaf2c1ece21e244`（GitHub 直链与官网均为这一版）；与历史版本同一张证书，可直接覆盖安装，登录态不丢
 - 注：jsDelivr 对 `@v1.1.5` 路径的缓存暂时清不掉，可能给到合并前的等价构建（SHA 以 `415b2e44` 开头）；同为 1.1.5 / 58、功能一致，以 GitHub 直链与官网为准
 - **1.0.3 已撤回，请勿使用**：其「检查更新」的两个镜像含被劫持域名，会跳转不良网站。已安装的请直接装最新版，别点「镜像 1 / 镜像 2」
@@ -34,9 +34,9 @@ https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhis
 
 - 安装包不含任何个人信息；登录凭据、姓名、学号、学校只存在应用私有目录，其他应用和 adb 读不到
 - 应用不采集设备信息、不埋点、不联网上报；权限只有 `INTERNET` 与 `ACCESS_NETWORK_STATE`，无 Service / Receiver / Provider
-- 版本检查与安装包下载会向 GitHub、jsDelivr 和官网暴露 IP、User-Agent 与请求路径；完整说明见 [隐私政策](https://zhishui-site.app.workbuddy.host/privacy.html?sharecode=KLDDLXOQRD)
+- 版本检查与安装包下载会向 GitHub、jsDelivr 和官网暴露 IP、User-Agent 与请求路径；完整说明见 [隐私政策](https://yuezao.org/privacy.html)
 - 仅供个人学习与自用，请使用自己的账号；不代登录、不批量操作，因使用产生的一切后果由使用者自行承担
-- 不收费、无内购、无广告、无第三方统计或 SDK；官网与仓库提供纯自愿、无对价的[微信赞赏码](https://zhishui-site.app.workbuddy.host/?sharecode=KLDDLXOQRD#support)，不影响任何功能。未上架任何应用商店，只在 Releases 与官网发布。源码全部公开，可自行核对
+- 不收费、无内购、无广告、无第三方统计或 SDK；官网与仓库提供纯自愿、无对价的[微信赞赏码](https://yuezao.org/#support)，不影响任何功能。未上架任何应用商店，只在 Releases 与官网发布。源码全部公开，可自行核对
 
 ## 已知限制
 
@@ -65,7 +65,7 @@ python tools/audit_apk.py --config ../web-app/config.json      # 可选：自检
 
 - [开发复盘](docs/DEVELOPMENT.md)：从构想到当前版本的完整流程、关键决策与踩过的坑（含官网、云服务与许可变更）；协议细节（请求地址、参数、签名规则）不展开，第三方服务条款通常禁止再发布这类资料
 - [接口说明](docs/API.md) · [消费记录的分页与缓存策略](docs/RECORDS_CACHE.md) · [贡献说明](CONTRIBUTING.md)
-- [更新日志](https://zhishui-site.app.workbuddy.host/changelog.html?sharecode=KLDDLXOQRD) · [隐私政策](https://zhishui-site.app.workbuddy.host/privacy.html?sharecode=KLDDLXOQRD) · [问题反馈](https://zhishui-site.app.workbuddy.host/feedback.html?sharecode=KLDDLXOQRD)（官网，不用 GitHub 账号也能留言）
+- [更新日志](https://yuezao.org/changelog.html) · [隐私政策](https://yuezao.org/privacy.html) · [问题反馈](https://yuezao.org/feedback.html)（官网，不用 GitHub 账号也能留言）
 
 ## 参考实现
 

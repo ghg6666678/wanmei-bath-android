@@ -2831,15 +2831,14 @@ $('#btnLogout').onclick = () => {
  * 任何一步失败都不会把用户卡在空白弹窗上：最差也能给出已知版本和手动下载地址。 */
 const APP_VERSION = '1.0.3';        /* 网页端版本；安卓端以安装包里的真实版本为准 */
 const REPO_HOME = 'https://github.com/ghg6666678/wanmei-bath-android';
-/* 站点基址与分享码：换域名只改这两行，下面所有面向用户的入口都由它们拼出来。
-   站点用分享码控制访问，链接不带 sharecode 会 403。
-   设置里「官网」这一行、以及以后所有面向用户的入口都指这里；
+/* 站点基址：换域名只改这一行，下面所有面向用户的入口都由它拼出来。
+   官网已由 Cloudflare 边缘直出、不再校验分享码，对外链接一律不带码（2026-11-14 起）；
+   Update.java 里的 latest.json 暂仍带码走旧域名，1.2.0 发版时统一切到本基址。
    GitHub 仓库只作为更新弹层的退路与官网页脚的「项目主页」存在。 */
 const SITE_ORIGIN = 'https://yuezao.org';
-const SHARE_CODE = 'KLDDLXOQRD';
-const SITE_URL = SITE_ORIGIN + '/?sharecode=' + SHARE_CODE;
-/* 官网反馈页。整条地址由基址拼出；换站点只改上面两行，同时记得同步 README 与隐私政策正文里的域名。 */
-const FEEDBACK_URL = SITE_ORIGIN + '/feedback.html?sharecode=' + SHARE_CODE;
+const SITE_URL = SITE_ORIGIN + '/';
+/* 官网反馈页。换站点只改上面一行，同时记得同步 README 与隐私政策正文里的域名。 */
+const FEEDBACK_URL = SITE_ORIGIN + '/feedback.html';
 
 /* 版本号比较：1.0.10 > 1.0.9；带后缀的（1.0.3-dev）比正式版旧。与原生 Update.verCmp 规则一致 */
 function verCmp(a, b) {
