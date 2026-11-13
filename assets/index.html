@@ -1189,6 +1189,9 @@ function notifySetupHint() {
   const optedOut = !!(st && (st.perm === false || st.enabled === false));
   if (dismissed || optedOut) return '';
   if (working) return '';   /* 已经上岛，没有任何需要用户再设置的东西 */
+  /* 开关已经打开、又没有待处理的通知时，这个教人「去开开关」的框不该再出现
+     ——没有预约时永远不会上岛，框会一直挂着劝一个已经做完的动作。 */
+  if (liveWhy === 'yes' && (!d || !d.found || d.chars)) return '';
 
   const buttons = '<div style="display:flex;gap:7px;margin-top:10px">'
     + '<button class="btn ghost sm" style="flex:1" id="btnNotifyHintOk">知道了</button>'
@@ -1645,9 +1648,26 @@ function renderNotifyState() {
     val.textContent = '锁屏已显示';
     info.textContent = '验证码正以“灵动岛”显示在锁屏 / 状态栏。';
   } else if (liveCapable) {
-    val.textContent = '仅通知栏';
-    /* 按应用的「锁屏」开关没有公开 API，读不到就不断言，只说风险见下方 */
-    info.textContent = '通知能收到，但「实时活动」没开；锁屏会不会显示取决于系统设置，风险见下方。点这里去打开。';
+    /* 开关的真实状态在 liveWhy（canPostPromotedNotifications），通知的提升
+       结果在 diag.flagged——两者必须分开看：没有预约时根本没有通知可提升，
+       flagged 恒为 false，不能据此断言「开关没开」。用户实测发现的正是
+       这条：开了实时活动、没有预约，状态行仍显示「仅通知栏」。 */
+    const swOn = String(st && st.liveWhy) === 'yes';
+    const found = !!(d && d.found);
+    if (swOn && !found) {
+      val.textContent = '实时活动已开启';
+      info.textContent = '取到验证码后，会以「灵动岛」显示在锁屏 / 状态栏；当前没有进行中的预约，还没有发通知。';
+    } else if (swOn && d && d.chars) {
+      val.textContent = '实时活动已开启';
+      info.textContent = '通知已满足提升条件，系统还没完成提升；下次下拉刷新会按新设置重发。';
+    } else if (swOn && found) {
+      val.textContent = '实时活动已开启';
+      info.textContent = '当前这条通知不满足提升条件，已按普通通知显示；下次下拉刷新会重发。';
+    } else {
+      val.textContent = '仅通知栏';
+      /* 按应用的「锁屏」开关没有公开 API，读不到就不断言，只说风险见下方 */
+      info.textContent = '通知能收到，但「实时活动」没开；锁屏会不会显示取决于系统设置，风险见下方。点这里去打开。';
+    }
   } else {
     val.textContent = '通知已开启';
     info.textContent = '本机没有实时活动，验证码按普通通知显示，锁屏能否看到取决于系统设置。';
