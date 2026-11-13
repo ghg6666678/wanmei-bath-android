@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">智水</string>
+    <string name="app_name">约澡</string>
     <!-- 通知类别名：会原样显示在系统设置的「子类别」里，要让人一眼知道是存验证码的那条 -->
     <string name="notify_channel_name">验证码显示</string>
     <string name="notify_channel_desc">有预约时将验证码显示在通知栏和锁屏上</string>

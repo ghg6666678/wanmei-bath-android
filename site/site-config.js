@@ -1,7 +1,7 @@
 /* 站点配置：发版时只改这一个文件。
    index.html 里的版本号、体积、下载地址都从这里读，避免页面上手写导致不一致。 */
 window.SITE = {
-  name: '智水',
+  name: '约澡',
   repo: 'ghg6666678/wanmei-bath-android',
   latest: {
     version: '1.1.5',

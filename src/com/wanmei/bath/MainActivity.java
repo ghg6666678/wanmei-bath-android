@@ -334,7 +334,7 @@ public class MainActivity extends android.app.Activity {
                             ? "zhishui.apk" : fileName.trim();
                     android.app.DownloadManager.Request req =
                             new android.app.DownloadManager.Request(Uri.parse(url.trim()));
-                    req.setTitle("智水 " + name);
+                    req.setTitle("约澡 " + name);
                     req.setDescription("正在下载新版本 APK");
                     req.setMimeType("application/vnd.android.package-archive");
                     req.setNotificationVisibility(
