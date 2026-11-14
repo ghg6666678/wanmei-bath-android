@@ -491,8 +491,9 @@ public class MainActivity extends android.app.Activity {
                     } catch (Throwable t) {
                         try {
                             o.put("ok", false);
-                            o.put("error", t.getMessage() == null
-                                    ? t.getClass().getSimpleName() : t.getMessage());
+                            /* 这里不提示用户（拉不到就用内置文本），但出口仍走 msg()：
+                               哪天有人把这个 error 显示出来，也不会看到类名。 */
+                            o.put("error", msg(t));
                         } catch (Exception ignored) { }
                     }
                     postPolicy(id, o.toString());
