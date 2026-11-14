@@ -23,7 +23,7 @@
 - **红线**：与完美校园直接对话的那一层不能搬进 Cloudflare，否则出站变成境外 PoP，登录 IP 会被判异常。「以后把所有网页迁到 Workers / GitHub Pages」只落实了静态部分，业务层留在国内是设计，不是遗留。
 - **分享码**：公开域名全链路不需要；只有直连上游才要，且由 Worker 的 `proxy()` 自动补。APK 的更新链路也已切到 `yuezao.org` 裸链。
 - **部署**：官网静态与网页端外壳 → `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`；上游 Python 服务 → `web-app/README.md`。
-- **隐私政策**：`site/policy.json` 是唯一源，`python tools/gen_policy.py` 一次生成官网页面、应用内置文本与 `DISC_VER`，构建与部署前都有指纹校验（见第 16 章）。
+- **隐私政策**：Android 与网页端各一份，源分别是 `site/policy.json` 与 `site/policy-web.json`。官网 `privacy.html` 是分流入口，`privacy-android.html` / `privacy-web.html` 各承载一份完整正文；`python tools/gen_policy.py` 一次生成全部产物并校验网页端应用内模板，构建与部署前都有组合指纹校验（见第 16 章）。
 
 ---
 
@@ -1810,6 +1810,8 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 **教训**：架构变更后要回头扫一遍政策里所有「谁托管 / 是否境内 / 和谁通信」的断言。这类句子不会随代码报错，只会在合规上悄悄过期——12.29 的检查清单应该再加一条：**链路或托管方变更 → 回头重读第 6、8、16 节**。
 
+> **同日后续**：官网把两份政策彻底拆开——`privacy.html` 改成分流入口（参考同类项目 `m.njust.store/privacy.html` 的做法），`privacy-android.html` / `privacy-web.html` 各承载一份完整正文，避免网页端用户误读 Android 条款。生成器随之扩展为「两个源、五处产物」，见第 14 / 16 章。
+
 ## 13. 小结
 
 从「想分析客户端」到「发现业务在 H5」，从「必须依赖额外权限与官方客户端」到「手机号 + 验证码纯登录」，从「一个能跑的网页」到「一份可覆盖安装、可审计、可回滚的 APK」——整个过程真正起作用的不是某个技巧，而是几次及时的**边界判断**：
@@ -1836,13 +1838,16 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 | 文件 | 作用 |
 | --- | --- |
 | `index.html` | 首页：介绍、功能、下载与安装、锁屏风险提示、常见问题 |
-| `privacy.html` | 隐私政策（16 节，第 9 节带 `#s9` 锚点供首页与 App 内引用，第 16 节为官网反馈表单）；**正文区由 `tools/gen_policy.py` 生成，勿手改** |
+| `privacy.html` | 隐私政策**分流入口**：选 Android 客户端 / 网页端；卡片上的版本号与日期由生成器填 |
+| `privacy-android.html` | Android 客户端政策全文（16 节，`#s9` / `#s16` 锚点供首页与反馈页引用）；正文区由生成器产出 |
+| `privacy-web.html` | 网页端政策全文；正文区由生成器产出 |
 | `changelog.html` | 更新日志，按时间倒序 |
 | `style.css` | 全站样式，深浅两套主题 |
 | `site-config.js` | 版本 / 体积 / 仓库地址；**政策版本不在这里**，唯一源是 `site/policy.json` |
-| `policy.json` | 隐私政策正文与版本号的唯一源：应用热更新拉它，官网页面与应用内置文本都从它生成 |
+| `policy.json` | **Android** 政策唯一源：应用热更新拉它，官网页面与应用内置文本都从它生成 |
+| `policy-web.json` | **网页端** 政策唯一源：官网页面从它生成，网页端应用内 `<template>` 与它逐字校验 |
 
-**政策版本不再手工对齐**：`site-config.js` 里的 `policyVersion` / `policyDate` 已删除。`site/policy.json` 是唯一源，`python tools/gen_policy.py` 一次生成官网 `privacy.html`、应用内 `policyTpl` 与 `DISC_VER`；每份生成物带正文指纹，`tools/build.sh` 与 `web-app/cloudflare/build-assets.mjs` 都会在构建/部署前校验，漏跑直接拦下。详见第 16 章。（12.29 那套「两边各自递增、App 允许滞后一个发布周期」的做法已作废。）
+**政策版本不再手工对齐**：`site-config.js` 里的 `policyVersion` / `policyDate` 已删除。Android 与网页端各有唯一源（`policy.json` / `policy-web.json`），`python tools/gen_policy.py` 一次生成分流入口、两份正文页、Android 应用内置文本与 `DISC_VER`，并校验网页端应用内模板；每份生成物带组合指纹，`tools/build.sh` 与部署脚本都会校验，漏跑直接拦下。详见第 16 章。
 
 **部署（现行做法）**：官网文件仍以本仓库 `site/` 为唯一维护点，但**线上不再走 GitHub Pages / WorkBuddy 发布**，而是交给 `web-app` 仓库的 Cloudflare Worker：
 
@@ -1955,11 +1960,11 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 2. **文本清洗**。远程 HTML 按白名单重建节点，只留 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。**必须**：页面挂着原生桥，一段注入的 `<script>` 等于远程拿到整个应用的权限；政策文本没有任何正当理由需要脚本。
 3. **同意绑定版本**。远程版本高于已同意的版本时，仍然弹锁定层（标题改成「隐私政策已更新」，上方显示版本、生效日期与变更摘要），滑到底才能同意。《个人信息保护法》第 14 条要求处理规则变更重新取得同意——热更新只省掉发版，不能省掉同意。
 
-**以后更新政策的操作**（1.2.0 起，改一处就够）：
+**以后更新政策的操作**（1.2.0 起）：
 
-1. 只改 `site/policy.json`：`ver` +1（字符串数字）、`date` 换生效日期、`summary` 一句话说明改了什么、`note` 写本版相对上一版的差异（只在官网显示，弹层放不下）、`html` 换正文。
-2. `python tools/gen_policy.py`——一次生成三处：官网 `site/privacy.html`、应用内置 `<template id="policyTpl">`、`DISC_VER`。
-3. `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`。构建脚本按指纹校验三处是否同步，不同步直接拒绝部署。
+1. 只改对应的源：Android 改 `site/policy.json`、网页端改 `site/policy-web.json`；`ver` +1（字符串数字）、`date` 换生效日期、`summary` 一句话、`note` 写本版差异、`html` 换正文。
+2. `python tools/gen_policy.py`——一次生成分流入口、两份正文页、Android 应用内置 `policyTpl` 与 `DISC_VER`；同时校验网页端应用内模板与 `POLICY_VER` 是否跟上了源。
+3. `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`。构建脚本按组合指纹校验五处产物是否同步，不同步直接拒绝部署。
 4. 老用户下次启动会看到「已更新」，同意后才继续用。
 
 **为什么是「生成」而不是「页面里现拉」**：官网若靠 JS 拉 `policy.json` 再渲染，关掉 JS 或搜索引擎抓取时就是一片空白——隐私政策属于必须直接读得到的东西。静态生成的代价只是要跑一次脚本，由下面两道闸门保证不会忘。
@@ -1968,14 +1973,16 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 
 | 产物 | 来源 | 校验点 |
 | --- | --- | --- |
-| `site/privacy.html` 正文区 | `policy.json` 的 `html`（转成网页格式） | `tools/gen_policy.py --check` |
-| `assets/index.html` 的 `policyTpl` | 同一份 `html`（原样） | 同上 |
-| `DISC_VER` | `policy.json` 的 `ver` | 同上 |
+| `site/privacy.html` 卡片区 | 两份政策的 `ver` / `date` / `applies` | `tools/gen_policy.py --check` |
+| `site/privacy-android.html` 正文区 | `policy.json` 的 `html` | 同上 |
+| `site/privacy-web.html` 正文区 | `policy-web.json` 的 `html` | 同上 |
+| `assets/index.html` 的 `policyTpl` + `DISC_VER` | `policy.json` | 同上 |
+| `web-app/web/index.html` 的 `policyTpl` + `POLICY_VER` | `policy-web.json`（逐字比对，不改写） | 同上 |
 | `https://yuezao.org/policy.json` | 文件本身 | `build-assets.mjs` 部署前校验 |
 
-每份生成物里都带 `<!-- POLICY:BEGIN … sha256=xxxx -->`，指纹 = `sha256([ver, date, applies, html].join('\n')).slice(0, 12)`，`tools/gen_policy.py` 与 `build-assets.mjs` 按同一算法各算一次。`site-config.js` 里原来的 `policyVersion/policyDate` 已删除——同一个版本号存三处，就是漂移的入口。
+每份生成物里都带 `<!-- POLICY:BEGIN … sha256=xxxx -->`（入口页是 `POLICY:INDEX:BEGIN`），指纹 = 两份源的 `[ver, date, applies, html]` 共 8 个字段按行拼接后取 sha256 前 12 位；任一份政策变动，五处产物一起过期。`tools/gen_policy.py` 与 `build-assets.mjs` 按同一算法各算一次。`site-config.js` 里原来的 `policyVersion/policyDate` 已删除——同一个版本号存三处，就是漂移的入口。
 
 生成时做的转换（只为官网服务，应用正文不动）：`<div class="policy">` 去掉外壳、`<h4>` → `<h2 id="sN">`（编号取自标题里的「N.」，于是 `#s15` 这类锚点可用）、按标题自动生成目录、`warn-red` → `red`（官网样式表叫 `red`）、顶部版本行按 `ver/date/applies` 重写。
 
-`policy.json` 的 `html` 两个页面共用，所以**不能**出现 `id`/`script`/`style`/自定义 class——应用侧清洗白名单只有 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。写成别的，官网上正常、手机上会被静默丢掉。脚本里有一段自检专门拦这个。
+`policy.json` 的 `html` 同时用于官网与应用内模板，所以**不能**出现 `id`/`script`/`style`/自定义 class——应用侧清洗白名单只有 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。写成别的，官网上正常、手机上会被静默丢掉。脚本里有一段自检专门拦这个。`policy-web.json` 不受这套白名单约束——网页端政策本来就内置在页面里，不经过远程清洗。
 

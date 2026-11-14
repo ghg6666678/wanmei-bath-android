@@ -15,7 +15,7 @@ window.SITE = {
     localPath: 'zhishui-1.1.5.apk'
   },
   /* 政策版本不在这里：它只有一份，在 site/policy.json 的 ver/date 里。
-     官网 privacy.html 与应用内文本都由 tools/gen_policy.py 从那里生成，
+     官网 privacy-android.html 与应用内文本都由 tools/gen_policy.py 从那里生成，
      这里再存一遍就等于给自己留一个「改了这处忘那处」的口子。 */
   contact: 'https://github.com/ghg6666678/wanmei-bath-android/issues'
 };
