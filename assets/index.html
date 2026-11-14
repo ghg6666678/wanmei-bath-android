@@ -874,8 +874,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <div class="sheet" id="diagSheet">
   <div class="bar-h"></div>
   <h3>诊断信息</h3>
-  <div class="hint">这些内容只在本机生成，不联网、不上传，也不含手机号和姓名。出问题时点「复制」，粘到反馈里——界面上只说「网络未连接」，这里才有原始原因。</div>
+  <div class="hint">这些内容只在本机生成，不联网、不上传，也不含手机号和姓名；<strong>存在本机文件里，重启和闪退都不会丢</strong>。出问题时点「复制」，粘到反馈里——界面上只说「网络未连接」，这里才有原始原因。</div>
   <div class="diagbox" id="diagBody"></div>
+  <div style="text-align:right;margin-top:7px"><a href="javascript:void(0)" id="diagClear" style="font-size:12px;color:var(--brand);text-decoration:none">清空记录</a></div>
   <div style="display:flex;gap:9px;margin-top:12px">
     <button class="btn ghost" style="flex:1" id="diagClose">关闭</button>
     <button class="btn" style="flex:1.4" id="diagCopy">复制</button>
@@ -905,14 +906,40 @@ const DIAG_MAX = 60;
 const __diag = [];
 function diagAdd(kind, where, raw, shown) {
   try {
-    __diag.push({
+    const rec = {
       t: Date.now(), kind: kind || '', where: where || '',
       raw: String(raw == null ? '' : raw).slice(0, 500),
       shown: String(shown == null ? '' : shown)
+    };
+    __diag.push(rec);
+    if (__diag.length > DIAG_MAX) __diag.splice(0, __diag.length - DIAG_MAX);
+    /* 同时落盘。只留内存的话，「重启一下试试」这一步就把证据弄丢了，
+       而重启恰恰是多数人遇到问题的第一反应；闪退更是一个字都留不下。 */
+    const nat = __native();
+    if (nat && nat.diagAdd) {
+      try { nat.diagAdd(rec.kind, rec.where, rec.raw, rec.shown); } catch (e) { }
+    }
+  } catch (e) { }
+}
+
+/* 把上次留在本机文件里的记录读回来。必须在任何 diagAdd 之前跑，
+   否则新事件会排到旧事件前面（诊断页是「新的在上」，顺序反了就误导人）。 */
+(function diagRestore() {
+  const nat = __native();
+  if (!nat || !nat.diagDump) return;
+  try {
+    const arr = JSON.parse(String(nat.diagDump() || '[]'));
+    if (!Array.isArray(arr) || !arr.length) return;
+    arr.forEach(e => {
+      __diag.push({
+        t: Number(e && e.t) || 0, kind: String((e && e.kind) || ''),
+        where: String((e && e.where) || ''),
+        raw: String((e && e.raw) || ''), shown: String((e && e.shown) || '')
+      });
     });
     if (__diag.length > DIAG_MAX) __diag.splice(0, __diag.length - DIAG_MAX);
   } catch (e) { }
-}
+})();
 /* 脚本本身抛错、以及没人 catch 的 Promise —— 这两类恰恰最像「程序 bug」，必须留证据 */
 window.addEventListener('error', e => {
   diagAdd('js', 'onerror', (e && e.message ? e.message : '') +
@@ -2063,6 +2090,7 @@ async function loadAll() {
     state.orders = j.orders || [];
     state.rooms = j.bathrooms || [];
     state.settings = j.settings || j.limits || {};
+    if (state.netDown) diagAdd('net', '恢复', '', '刷新成功');
     state.netDown = '';             /* 这一次通了，下回再断可以重新提示 */
     /* 校准优先级：
        1) srvClock —— 原生侧从最近一次响应的 Date 头解析出的服务器时刻。
@@ -3085,6 +3113,7 @@ $('#lgSubmit').onclick = async () => {
   $('#lgWarn').style.display = 'none';
   try {
     await nativeCall('doLogin', phone, code);
+    diagAdd('app', '登录', '', '成功');
     $('#lgCode').value = '';
     await loadAll();
     /* state.cfg 是 loadAll 里刷新的，所以要在它之后判断：
@@ -3102,6 +3131,7 @@ $('#lgSubmit').onclick = async () => {
       toast('登录成功');
     }
   } catch (e) {
+    diagAdd('app', '登录', (e && e.message) || '', '失败');
     $('#lgWarn').textContent = e.message;
     $('#lgWarn').style.display = 'block';
   } finally {
@@ -3234,7 +3264,8 @@ function diagLines() {
     L.push('上次检查更新 ' + (u.source || '—') + ' · ' + (u.ok ? '成功' : '失败') +
            (u.stale ? '（降级使用旧记录）' : ''));
   }
-  L.push('已记录事件 ' + __diag.length + ' 条（上限 ' + DIAG_MAX + '，只在本机内存里）');
+  L.push('保存位置   本机文件 files/diag.log（重启与闪退都会保留，上限 200 条）');
+  L.push('已记录事件 ' + __diag.length + ' 条');
   L.push('');
   L.push('—— 最近事件（新的在上）——');
   if (!__diag.length) L.push('无');
@@ -3670,6 +3701,26 @@ $('#rowDiag').onclick = () => { showSheet('#diagSheet'); renderDiag(); };
 $('#diagClose').onclick = () => hideSheet();
 /* 每次打开都重新收集：复现完再打开一次，就是最新的现场 */
 $('#diagCopy').onclick = () => { if (!__diagText) renderDiag(); copyText(__diagText); };
+/* 清空用「再点一次确认」，不弹确认框：诊断页本身就是弹层，再叠一层容易出层叠错乱 */
+let __diagClearArm = 0;
+$('#diagClear').onclick = () => {
+  const el = $('#diagClear');
+  if (Date.now() - __diagClearArm < 4000) {
+    __diagClearArm = 0;
+    el.textContent = '清空记录';
+    const nat = __native();
+    if (nat && nat.diagClear) { try { nat.diagClear(); } catch (e) { } }
+    __diag.length = 0;
+    renderDiag();
+    toast('已清空');
+    return;
+  }
+  __diagClearArm = Date.now();
+  el.textContent = '再点一次确认清空';
+  setTimeout(() => {
+    if (Date.now() - __diagClearArm >= 4000) el.textContent = '清空记录';
+  }, 4200);
+};
 $('#updClose').onclick = () => hideSheet();
 $('#updRetry').onclick = () => runUpdateCheck();
 
@@ -3901,6 +3952,8 @@ $('#guideWx').onclick = () => {
   }, 1500);
 };
 
+/* 时间线锚点：偶发问题最需要的是「这次启动发生了什么」，而不是只有失败那几秒 */
+diagAdd('app', '启动', '', state.appVersion || APP_VERSION);
 loadAll();
 // 3 分钟一次即可：太密会把这个账号的用水会话打挂（实测高频请求会触发保护）
 setInterval(() => {

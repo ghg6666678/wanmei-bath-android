@@ -28,6 +28,7 @@ public class MainActivity extends android.app.Activity {
     static final Api api = new Api();
 
     private WebView web;
+    private FrameLayout rootView;
     private JSONObject cfg = new JSONObject();
     private Login login;
 
@@ -37,20 +38,37 @@ public class MainActivity extends android.app.Activity {
         // 以当前真实状态为基线，避免首次启动被误判成「权限刚被打开」
         lastNotifyPerm = hasNotifyPermission();
 
+        /* 诊断日志要最先就位：它得能接住「启动过程中就崩了」这种情况。
+           读回上次的记录 + 装上未捕获异常兜底，两步都很轻（一次小文件读取）。 */
+        Diag.init(this);
+        Diag.installCrashHandler(this);
+
         applySystemBars();
 
         cfg = Store.load(this);
         api.setConfig(cfg);
         migrateNotifyPermissionDecision();
 
-        FrameLayout root = new FrameLayout(this);
-        root.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
-        root.setBackgroundColor(isDark() ? 0xFF0F1418 : 0xFFF4F6F8);
+        rootView = new FrameLayout(this);
+        rootView.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
+        rootView.setBackgroundColor(isDark() ? 0xFF0F1418 : 0xFFF4F6F8);
+        setContentView(rootView);
 
+        buildWeb();
+    }
+
+    /**
+     * 建一个 WebView 并把它挂上去。
+     *
+     * <p>抽成方法的原因只有一个：WebView 的渲染进程会被系统回收（低内存、或渲染器自己崩了），
+     * 那时 {@code web} 这个对象还在，但画面永远是白的，用户只能杀进程。重建必须换一个全新的
+     * WebView 实例，光 reload 没用。
+     */
+    private void buildWeb() {
+        FrameLayout root = rootView;
         web = new WebView(this);
         web.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
         root.addView(web);
-        setContentView(root);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -71,6 +89,28 @@ public class MainActivity extends android.app.Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 return handleScheme(url);
+            }
+
+            /**
+             * 渲染进程没了（系统回收 / 渲染器崩溃）。
+             *
+             * <p>默认行为是直接杀掉整个应用——对用户来说就是「用着用着闪退」。这里改成
+             * 记一笔 + 换个新 WebView 重新加载：多数情况下用户只会看到页面刷了一下。
+             * 返回 true 表示「我处理了」，系统不再杀进程。
+             */
+            @Override
+            public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
+                boolean crashed = d != null && d.didCrash();
+                Diag.add(MainActivity.this, "crash", "webview",
+                        "render process gone（didCrash=" + crashed + "，低内存回收或渲染器崩溃）",
+                        "页面已重新加载");
+                try {
+                    ViewGroup parent = (ViewGroup) v.getParent();
+                    if (parent != null) parent.removeView(v);
+                    v.destroy();
+                } catch (Throwable ignored) { }
+                try { buildWeb(); } catch (Throwable ignored) { }
+                return true;
             }
         });
         web.addJavascriptInterface(new Bridge(), "Android");
@@ -424,6 +464,24 @@ public class MainActivity extends android.app.Activity {
                 o.put("net", netDiag());
             } catch (Exception ignored) { }
             return o.toString();
+        }
+
+        /** 读回本机保存的诊断记录（JSON 数组），前端启动时载入到自己的环形缓冲里。 */
+        @JavascriptInterface
+        public String diagDump() {
+            try { return Diag.dumpJson(MainActivity.this); } catch (Throwable t) { return "[]"; }
+        }
+
+        /** 记一条诊断记录。落盘，重启不丢。 */
+        @JavascriptInterface
+        public void diagAdd(String kind, String where, String raw, String shown) {
+            Diag.add(MainActivity.this, kind, where, raw, shown);
+        }
+
+        /** 用户主动清空。 */
+        @JavascriptInterface
+        public void diagClear() {
+            Diag.clear(MainActivity.this);
         }
 
         /**
