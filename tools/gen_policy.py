@@ -90,6 +90,12 @@ def convert(html):
     # 顶部版本行由字段生成，先摘掉正文里的手写副本（只摘第一处）
     body = re.sub(r'^\s*<p class="pmeta">.*?</p>\s*', "", body, count=1, flags=re.S)
     body = body.replace('class="warn-red"', 'class="red"')
+    # 源里为了兼容性一律写绝对地址（应用内点击要交给系统浏览器）；官网正文页
+    # 指向自身的锚点还原成页内跳转，省掉一次整页重载。只影响官网渲染，源不变。
+    body = re.sub(r'href="https://yuezao\.org/privacy-android\.html(#s\d+)"',
+                  r'href="\1"', body)
+    # 还原成页内锚点后不该再新开标签页，否则「第 15 节」会弹出一份新页面
+    body = re.sub(r'(href="#s\d+")\s+target="_blank"\s+rel="noopener"', r'\1', body)
 
     toc = []
 
@@ -162,13 +168,40 @@ def render_app(a, fp):
 # ---------------------------------------------------------------- 一致性
 
 
+LINK_TAG = re.compile(r"<a\b([^>]*)>", re.I)
+LINK_HREF = re.compile(r'href\s*=\s*"([^"]*)"', re.I)
+ABS_HREF = re.compile(r"^(https?:|mailto:)", re.I)
+
+
+def link_problems(d, label):
+    """两份政策的链接都必须是 http(s)/mailto 绝对地址。
+
+    Android 应用侧会清洗远程 HTML，只放行这两类 href；相对路径、页内锚点、
+    javascript: 会被整个丢掉，渲染成「看着像链接、点了没反应」。就算 href
+    侥幸留下，WebView 里相对路径也会解成 file:///android_asset/xxx.html，
+    打开是一片空白。网页端虽然本来就在浏览器里，但相对路径会指向
+    web.yuezao.org（那里没有 feedback.html），同样 404。
+    """
+    out = []
+    html = str(d.get("html") or "")
+    for tag in LINK_TAG.findall(html):
+        m = LINK_HREF.search(tag)
+        if not m:
+            out.append("%s: 出现没有 href 的 <a>，应用里会变成点了没反应的空链接" % label)
+            continue
+        url = m.group(1).strip()
+        if not ABS_HREF.match(url):
+            out.append("%s: 链接 %r 不是 http(s)/mailto 绝对地址，应用侧清洗会丢掉 href" % (label, url))
+    return out
+
+
 def android_problems(d):
     """Android 侧自洽性：字段与正文手写副本、应用清洗白名单都要对得上。
 
     应用侧会清洗远程 HTML，正文里出现 script/style/id/自定义 class 会静默
     丢掉——官网上正常、手机上却没有，这种错最难发现。
     """
-    out = []
+    out = link_problems(d, "policy.json")
     html = str(d.get("html") or "")
     m = re.search(r'<p class="pmeta">(.*?)</p>', html, re.S)
     if not m:
@@ -193,9 +226,9 @@ def web_app_problems(w):
     网页端不走 sanitizePolicy（文本本来就内置在页面里），所以不能套 Android
     那套白名单；但「官网展示一份、应用内弹另一份」绝不能出现，故直接比对。
     """
-    out = []
+    out = link_problems(w, "policy-web.json")
     if not WEB_APP.exists():
-        return []
+        return out
     src = WEB_APP.read_bytes().decode("utf-8").replace("\r\n", "\n")
     m = re.search(r'<template id="policyTpl">\n(.*?)\n</template>', src, re.S)
     if not m:

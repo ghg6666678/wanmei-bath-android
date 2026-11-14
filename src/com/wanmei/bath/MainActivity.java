@@ -172,9 +172,11 @@ public class MainActivity extends android.app.Activity {
 
     private boolean handleScheme(String url) {
         if (url == null) return true;
-        if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://")) {
-            return false;
-        }
+        /* 只放行应用自身的 file:// 页面。http(s)/mailto/自定义 scheme 一律交给
+           系统浏览器：政策弹层里的链接必须在浏览器打开，在 WebView 内导航会把
+           整个单页应用替换掉；相对路径解析出的 file:// 空白页也不该出现。
+           JS 侧已有容器级委托拦截，这里是 target=_blank 等情况下的兜底。 */
+        if (url.startsWith("file://")) return false;
         try {
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             i.addCategory(Intent.CATEGORY_BROWSABLE);

@@ -730,9 +730,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
-  <!-- POLICY:BEGIN 本区由 tools/gen_policy.py 生成，勿手改 sha256=c98c3b0f1d6b -->
+  <!-- POLICY:BEGIN 本区由 tools/gen_policy.py 生成，勿手改 sha256=4eb47f148190 -->
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v4</strong> · 生效日期 <strong>2026-11-14</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v5</strong> · 生效日期 <strong>2026-11-14</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
     <p>本政策说明「约澡」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>
@@ -800,14 +800,14 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <p>问题、投诉或行使个人信息权利，可通过任一渠道：</p>
     <ul>
       <li>项目主页的 Issues：<a href="https://github.com/ghg6666678/wanmei-bath-android/issues" target="_blank" rel="noopener">github.com/ghg6666678/wanmei-bath-android/issues</a>（能看到历史记录，适合讨论）</li>
-      <li>官网的<a href="feedback.html">「问题反馈」页</a>：应用内「设置 → 应用 → 问题反馈」可直达，<strong>不需要 GitHub 账号</strong></li>
+      <li>官网的<a href="https://yuezao.org/feedback.html" target="_blank" rel="noopener">「问题反馈」页</a>：应用内「设置 → 应用 → 问题反馈」可直达，<strong>不需要 GitHub 账号</strong></li>
     </ul>
     <p>我们会在 7 个工作日内回复。</p>
 
     <h4>16. 官网反馈表单</h4>
-    <p>本应用内没有反馈表单，也不会主动上传任何内容。官网的<a href="feedback.html">「问题反馈」页</a>会把你填写的内容存入云端数据库，包括：反馈正文、可选的联系方式、反馈类型、提交时官网显示的版本号、来源页面与浏览器 User-Agent。这些内容只有在你在网页上主动提交时才会产生。</p>
+    <p>本应用内没有反馈表单，也不会主动上传任何内容。官网的<a href="https://yuezao.org/feedback.html" target="_blank" rel="noopener">「问题反馈」页</a>会把你填写的内容存入云端数据库，包括：反馈正文、可选的联系方式、反馈类型、提交时官网显示的版本号、来源页面与浏览器 User-Agent。这些内容只有在你在网页上主动提交时才会产生。</p>
     <p><strong>用途</strong>：仅用于定位问题和回复你，不用于广告或用户画像；除下列承载与传输服务外，不与任何第三方共享。数据存于 <a href="https://www.workbuddy.cn" target="_blank" rel="noopener">WorkBuddy 云服务</a>（境内）；提交请求与页面加载会经过 <strong>Cloudflare 边缘节点</strong>，页面还会从 <strong>jsDelivr</strong> 加载云服务 SDK。<strong>可见范围</strong>：网页端没有任何读取权限，只有管理员能查看。<strong>保留期限</strong>：处理完毕后保留不超过 12 个月。</p>
-    <p>请不要填写账号密码、短信验证码、身份证号等敏感信息，反馈内容以明文存储。需要删除已提交的反馈，可通过<a href="#s15">第 15 节</a>的方式联系。</p>
+    <p>请不要填写账号密码、短信验证码、身份证号等敏感信息，反馈内容以明文存储。需要删除已提交的反馈，可通过<a href="https://yuezao.org/privacy-android.html#s15" target="_blank" rel="noopener">第 15 节</a>的方式联系。</p>
 
     </div>
   <!-- POLICY:END -->
@@ -1427,7 +1427,7 @@ function setStar(v) {
    1.2.0 起版本号不再写死在这里：内置一份（离线兜底），启动后从官网拉
    policy.json，远程版本更高就以远程为准（见下方「隐私政策的联网更新」）。
    同意记录永远跟着【当前生效版本】比对，热更新的只是文本，不是同意。 */
-const DISC_VER = '4';   /* 由 tools/gen_policy.py 从 site/policy.json 同步，勿手改 */
+const DISC_VER = '5';   /* 由 tools/gen_policy.py 从 site/policy.json 同步，勿手改 */
 /* 当前生效版本。初始等于内置版本，装上远程新版后变大；所有同意判断都用它。 */
 let __policyVer = DISC_VER;
 let __policyMeta = null;   /* { ver, date, summary }：远程版本自带的元信息 */
@@ -3587,6 +3587,35 @@ $('#discNo').onclick = () => {
   toast('需要同意后才能使用本应用');
 };
 
+/* 政策正文里的链接一律交给系统浏览器，不在 App 的 WebView 里打开。
+   WebView 默认不新开窗口，target=_blank 也会把整个单页应用换成网页；相对
+   路径会解成 file:///android_asset/xxx.html（空白页），页内锚点在弹层里
+   没有对应 id；远程版本经 sanitizePolicy 后，非 http(s) 的 href 更是会被
+   整个丢掉，变成「看着像链接、点了没反应」。
+   源里的 href 已由生成器强制为绝对地址，这里再兜底旧缓存里的相对链接。
+   用容器级委托：policyApply 换掉 innerHTML 后依然生效，且不会碰到通知提示
+   里那条靠 onclick 跳「隐私政策第 9 条」的 javascript:void(0) 链接。 */
+function bindPolicyLinks() {
+  ['discBody', 'discSheetBody'].forEach(id => {
+    const box = document.getElementById(id);
+    if (!box || box.dataset.policyLinks) return;
+    box.dataset.policyLinks = '1';
+    box.addEventListener('click', e => {
+      const t = e.target;
+      const a = t && t.closest ? t.closest('a[href]') : null;
+      if (!a || !box.contains(a)) return;
+      const raw = String(a.getAttribute('href') || '').trim();
+      if (!raw || /^javascript:/i.test(raw)) return;
+      const url = /^(https?:|mailto:)/i.test(raw) ? raw
+        : raw.charAt(0) === '#' ? SITE_ORIGIN + '/privacy-android.html' + raw
+        : SITE_ORIGIN + '/' + raw.replace(/^\/+/, '');
+      e.preventDefault();
+      e.stopPropagation();
+      openExternal(url);
+    });
+  });
+}
+
 /* 政策正文只维护一份（<template id="policyTpl">），启动弹层和设置里各自克隆。
    否则两处各存一份，改条文迟早漏掉一处。 */
 function fillPolicy() {
@@ -3596,6 +3625,7 @@ function fillPolicy() {
     const el = document.getElementById(id);
     if (el && !el.innerHTML.trim()) el.innerHTML = tpl.innerHTML;
   });
+  bindPolicyLinks();
 }
 fillPolicy();
 

@@ -165,6 +165,8 @@
 - [12.29 隐私政策升 v3：补上官网这个通信方（1.1.5 发完之后发现）](#1229-隐私政策升-v3补上官网这个通信方115-发完之后发现)
 - [12.30 官网赞赏码、许可放宽与贡献约定（1.1.5 发完之后，暂不发版）](#1230-官网赞赏码许可放宽与贡献约定115-发完之后暂不发版)
 - [12.31 隐私政策升 v4：补上 Cloudflare 这个通信方（1.2.0 发版前发现）](#1231-隐私政策升-v4补上-cloudflare-这个通信方120-发版前发现)
+- [12.32 按「多端同步」规则做的一次全量对照（1.2.0 发版前）](#1232-按多端同步规则做的一次全量对照120-发版前)
+- [12.33 政策里的链接一律在浏览器打开（1.2.0 发版前发现）](#1233-政策里的链接一律在浏览器打开120-发版前发现)
 
 **15. 云服务：官网问题反馈（1.1.4 之后）**
 
@@ -1830,6 +1832,25 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 **顺带纠正一处口误**：两端「设置 → 隐私政策」打开的都是**应用内弹层**（`openPolicy()` / `showPolicy(false)`），不是官网链接，所以官网拆成分流入口不影响应用内入口。
 
+### 12.33 政策里的链接一律在浏览器打开（1.2.0 发版前发现）
+
+用户反馈：应用内隐私政策里的「问题反馈」点开是空链接。查下来是三层叠加，任何单独一层修了都还会剩一半：
+
+1. **源里就不是能点开的链接**：`policy.json` 正文写了 2 处 `href="feedback.html"` 和 1 处 `href="#s15"`。官网页面上完全正常，但应用内是 `file:///android_asset/` 基址。
+2. **远程版本更糟**：`sanitizePolicy()` 只放行 `http(s)/mailto`，其余 href 整个丢掉，渲染成 `<a>文字</a>`——看着像链接，点上去毫无反应。用 harness 跑真实函数验证：`sanitizePolicy('<a href="feedback.html">x</a>')` → `<a>x</a>`。页内锚点 `#s15` 在弹层里也没有对应 id（`#sN` 是官网生成时才加的）。
+3. **就算 href 留下也走错地方**：`MainActivity.handleScheme()` 对 http(s) 返回 `false`，让 WebView 自己加载，会把整个单页应用换成网页；相对路径则解成 `file:///android_asset/feedback.html`，一片空白。
+
+**修法（源头 + 应用层 + 护栏）**：
+
+- `site/policy.json` 升 **v5**：5 个链接全部改成 http(s) 绝对地址并统一 `target="_blank" rel="noopener"`。条文文字一字未改，但仍升版本——热更新只升不降，同一 `ver` 改正文会让已装 v4 内置版本的设备永远拿不到修订。
+- 生成器新增 `link_problems()`：**两份源**的 `<a>` 都必须有 href、且必须是 http(s)/mailto 绝对地址，相对路径 / 锚点 / `javascript:` / 无 href 一律报错。这条护栏直接对着本次根因，改条文时漏写会被 `--check` 拦下。官网渲染把指向 `privacy-android.html#sN` 的绝对锚点还原成页内 `#sN` 并去掉 `target`，避免「第 15 节」弹出新标签页。
+- 应用内新增 `bindPolicyLinks()`：在 `#discBody` / `#discSheetBody` 上做容器级 click 委托，一律 `preventDefault` 后交给 `openExternal()`（系统浏览器）。容器级委托使 `policyApply()` 换掉 innerHTML 后依然生效；只限政策容器，不碰通知提示里靠 `onclick` 跳第 9 条的那个 `javascript:void(0)` 链接。对旧缓存里残留的相对路径 / 锚点也做了拼接兜底。
+- 原生 `handleScheme()` 改为只放行 `file://`，http(s)/mailto/自定义 scheme 一律交给系统浏览器，作为 `target=_blank` 等情况下的兜底。
+
+**验证**：独立 harness 载入真实的 `sanitizePolicy` 与 `bindPolicyLinks`，mock `openExternal`，逐个点击 5 个真实链接 + 3 个旧缓存链接，8 项全部「已阻止默认行为 + 正确 URL 交给浏览器」，`javascript:void(0)` 保持不被拦截。
+
+**多端对照**（按 12.32 立的规则）：网页端政策 `policy-web.json` 里 0 个链接，且网页端本身运行在浏览器中，没有 WebView 这层问题，因此 `web-app/web/index.html` 与 `web-shell.html` 一行未改；两份政策的链接口径由生成器同一条自检约束，避免以后一边加链接一边漂移。
+
 ## 13. 小结
 
 从「想分析客户端」到「发现业务在 H5」，从「必须依赖额外权限与官方客户端」到「手机号 + 验证码纯登录」，从「一个能跑的网页」到「一份可覆盖安装、可审计、可回滚的 APK」——整个过程真正起作用的不是某个技巧，而是几次及时的**边界判断**：
@@ -1976,6 +1997,7 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 
 1. **只升不降**。远程版本必须严格大于当前版本，否则整份丢弃。否则旧文本被重放（CDN 缓存、误传、中间人），用户就会「同意」一个已作废的版本。
 2. **文本清洗**。远程 HTML 按白名单重建节点，只留 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。**必须**：页面挂着原生桥，一段注入的 `<script>` 等于远程拿到整个应用的权限；政策文本没有任何正当理由需要脚本。
+   > 由此推出：**正文里的每个链接都必须是 http(s)/mailto 绝对地址**（见 12.33）。相对路径与页内锚点会被清洗丢掉 href，变成点了没反应的空链接；生成器 `link_problems()` 会在构建前拦下。
 3. **同意绑定版本**。远程版本高于已同意的版本时，仍然弹锁定层（标题改成「隐私政策已更新」，上方显示版本、生效日期与变更摘要），滑到底才能同意。《个人信息保护法》第 14 条要求处理规则变更重新取得同意——热更新只省掉发版，不能省掉同意。
 
 **以后更新政策的操作**（1.2.0 起）：
@@ -2003,4 +2025,6 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 生成时做的转换（只为官网服务，应用正文不动）：`<div class="policy">` 去掉外壳、`<h4>` → `<h2 id="sN">`（编号取自标题里的「N.」，于是 `#s15` 这类锚点可用）、按标题自动生成目录、`warn-red` → `red`（官网样式表叫 `red`）、顶部版本行按 `ver/date/applies` 重写。
 
 `policy.json` 的 `html` 同时用于官网与应用内模板，所以**不能**出现 `id`/`script`/`style`/自定义 class——应用侧清洗白名单只有 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。写成别的，官网上正常、手机上会被静默丢掉。脚本里有一段自检专门拦这个。`policy-web.json` 不受这套白名单约束——网页端政策本来就内置在页面里，不经过远程清洗。
+
+另外**两份源的链接都必须写绝对地址**：Android 侧清洗会丢掉相对/锚点 href，网页端侧相对路径会指向 `web.yuezao.org`（那里没有 `feedback.html`）。生成器把指向 `privacy-android.html#sN` 的绝对锚点在官网上还原成页内 `#sN`，应用内则保留绝对地址交给系统浏览器；应用内的点击拦截见 12.33。
 
