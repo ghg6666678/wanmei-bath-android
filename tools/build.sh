@@ -55,6 +55,11 @@ fi
 rm -rf "$OUT"
 mkdir -p "$OUT/compiled" "$OUT/classes" "$OUT/dex"
 
+# APK 里内置一份隐私政策（离线兜底）。它是从 site/policy.json 生成的，
+# 没重新生成的话，包内条文与官网/远程版本就对不上——而界面上看不出任何异常。
+echo "[0/6] 隐私政策一致性"
+python "$HERE/gen_policy.py" --check
+
 echo "[1/6] 编译资源"
 "$BT/aapt2.exe" compile --dir "$ROOT/res" -o "$OUT/compiled/res.zip"
 

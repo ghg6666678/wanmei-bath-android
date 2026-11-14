@@ -14,10 +14,8 @@ window.SITE = {
        对已打开本站的人（已拿到分享码 cookie）是最快的一条路。 */
     localPath: 'zhishui-1.1.5.apk'
   },
-  /* 政策版本：官网与应用内是同一份条文，改一次两边一起 +1
-     （应用侧对应 assets/index.html 的 DISC_VER）。当前都是 v3；
-     应用侧的 v3 条文随下个应用版本生效。 */
-  policyVersion: '3',
-  policyDate: '2026-11-13',
+  /* 政策版本不在这里：它只有一份，在 site/policy.json 的 ver/date 里。
+     官网 privacy.html 与应用内文本都由 tools/gen_policy.py 从那里生成，
+     这里再存一遍就等于给自己留一个「改了这处忘那处」的口子。 */
   contact: 'https://github.com/ghg6666678/wanmei-bath-android/issues'
 };

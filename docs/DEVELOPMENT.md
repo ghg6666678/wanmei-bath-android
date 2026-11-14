@@ -1882,11 +1882,13 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 
 ### 15.6 隐私政策第 16 节与版本号
 
-反馈是官网独有的数据流，应用内没有。所以：
+反馈是官网独有的数据流，应用内没有。所以当时（v2）的做法是：
 
 - 官网政策升到 **v2**，只新增第 16 节，1–15 节一字未改，并在页头写明这一点；
 - 应用内 `DISC_VER` 保持 `'1'`——**不因为官网加了一节就逼所有手机用户重读政策**；
 - `site-config.js` 的 `policyVersion` 从此按「站点政策」独立递增，两边共享的 1–15 节改动时才一起加。
+
+> 1.2.0 起作废：官网与应用已合并为**一个版本号**（`site/policy.json` 的 `ver`），`site-config.js` 里那两个字段也删了。见第 16 节。
 
 ## 16. 隐私政策的联网更新（1.2.0）
 
@@ -1905,11 +1907,27 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 2. **文本清洗**。远程 HTML 按白名单重建节点，只留 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。**必须**：页面挂着原生桥，一段注入的 `<script>` 等于远程拿到整个应用的权限；政策文本没有任何正当理由需要脚本。
 3. **同意绑定版本**。远程版本高于已同意的版本时，仍然弹锁定层（标题改成「隐私政策已更新」，上方显示版本、生效日期与变更摘要），滑到底才能同意。《个人信息保护法》第 14 条要求处理规则变更重新取得同意——热更新只省掉发版，不能省掉同意。
 
-**以后更新政策的操作**：
+**以后更新政策的操作**（1.2.0 起，改一处就够）：
 
-1. 改 `site/policy.json`：`ver` +1（字符串数字）、`date` 换生效日期、`summary` 一句话说明改了什么、`html` 换正文。
-2. 可（不必）同步内置 `policyTpl`：内置只服务「从没联网成功过」的场景，允许滞后一版。
-3. `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`。
+1. 只改 `site/policy.json`：`ver` +1（字符串数字）、`date` 换生效日期、`summary` 一句话说明改了什么、`note` 写本版相对上一版的差异（只在官网显示，弹层放不下）、`html` 换正文。
+2. `python tools/gen_policy.py`——一次生成三处：官网 `site/privacy.html`、应用内置 `<template id="policyTpl">`、`DISC_VER`。
+3. `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`。构建脚本按指纹校验三处是否同步，不同步直接拒绝部署。
 4. 老用户下次启动会看到「已更新」，同意后才继续用。
 
-**还没统一的地方**：`site/privacy.html`（官网那个页面）是独立副本，改政策时要手工同步；`DISC_VER` 与 `policy.json` 的 `ver` 也必须人工保持一致（`policyApply` 只比较大小，不比内容）。这两处是当前唯一的漂移风险。
+**为什么是「生成」而不是「页面里现拉」**：官网若靠 JS 拉 `policy.json` 再渲染，关掉 JS 或搜索引擎抓取时就是一片空白——隐私政策属于必须直接读得到的东西。静态生成的代价只是要跑一次脚本，由下面两道闸门保证不会忘。
+
+**统一到什么程度（1.2.0）**：
+
+| 产物 | 来源 | 校验点 |
+| --- | --- | --- |
+| `site/privacy.html` 正文区 | `policy.json` 的 `html`（转成网页格式） | `tools/gen_policy.py --check` |
+| `assets/index.html` 的 `policyTpl` | 同一份 `html`（原样） | 同上 |
+| `DISC_VER` | `policy.json` 的 `ver` | 同上 |
+| `https://yuezao.org/policy.json` | 文件本身 | `build-assets.mjs` 部署前校验 |
+
+每份生成物里都带 `<!-- POLICY:BEGIN … sha256=xxxx -->`，指纹 = `sha256([ver, date, applies, html].join('\n')).slice(0, 12)`，`tools/gen_policy.py` 与 `build-assets.mjs` 按同一算法各算一次。`site-config.js` 里原来的 `policyVersion/policyDate` 已删除——同一个版本号存三处，就是漂移的入口。
+
+生成时做的转换（只为官网服务，应用正文不动）：`<div class="policy">` 去掉外壳、`<h4>` → `<h2 id="sN">`（编号取自标题里的「N.」，于是 `#s15` 这类锚点可用）、按标题自动生成目录、`warn-red` → `red`（官网样式表叫 `red`）、顶部版本行按 `ver/date/applies` 重写。
+
+`policy.json` 的 `html` 两个页面共用，所以**不能**出现 `id`/`script`/`style`/自定义 class——应用侧清洗白名单只有 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。写成别的，官网上正常、手机上会被静默丢掉。脚本里有一段自检专门拦这个。
+
