@@ -1429,7 +1429,14 @@ function discAcceptedVer() {
   }
   try { return localStorage.getItem('discAccepted') || ''; } catch (e) { return ''; }
 }
-function discAccepted() { return discAcceptedVer() === __policyVer; }
+/* 已同意 = 同意过的版本 ≥ 当前生效版本。
+   不用「等于」：版本回退的路径是真实存在的——缓存写入失败、远程暂时挂了
+   退回内置旧版、用户从新 APK 退回旧 APK。这时若判等，会拿一份更旧的文本
+   再让用户同意一次，属于纯粹的骚扰，而且会把同意记录改小。 */
+function discAccepted() {
+  const a = policyNum(discAcceptedVer());
+  return a > 0 && a >= policyNum(__policyVer);
+}
 function setDiscAccepted(v) {
   if (typeof Android !== 'undefined' && Android.setDiscAccepted) {
     try { Android.setDiscAccepted(v ? __policyVer : ''); return; } catch (e) { }
