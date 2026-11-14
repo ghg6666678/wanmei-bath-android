@@ -80,10 +80,28 @@ public class Update {
      *
      * <p>1.2.0 起用 yuezao.org：官网全链路不校验分享码，裸链即可，因此这里不再拼
      * {@code ?sharecode=}。旧域名 {@code zhishui-site.app.workbuddy.host} 是 1.1.5 及
-     * 以前客户端写死的，**服务端必须继续留着**，但新客户端不再使用；缓存里若还留着
-     * 旧链接，{@link #isSiteUrl(String)} 仍会把它认成「官网直下」而不是 CDN。
+     * 以前客户端写死的，**服务端必须继续留着**；1.2.0 起它作为<b>国内直连</b>的那条通道
+     * 重新启用（见 {@link #SITE_CN}），但走的是新常量而不是这段历史逻辑。缓存里若还留着
+     * 带旧分享码的旧链接，{@link #isSiteUrl(String)} 仍会把它认成「官网直下」而不是 CDN。
      */
     private static final String SITE_BASE = "https://yuezao.org";
+
+    /**
+     * 官网站点的**国内直连**部署（WorkBuddy 托管，服务端在境内）。
+     *
+     * <p>为什么同一个站要内置两个地址：yuezao.org 走 Cloudflare 边缘，对国内手机网络
+     * 常常要绕一圈出境——TLS 握手被吞、整包只有几十 KB/s 的情况都实测到过。这里这份
+     * 部署内容完全相同（同一套 site/ 目录），但请求直接从境内出去，是「不绕路」的那条。
+     *
+     * <p>它需要分享码，且分享码是<b>写在客户端里</b>的（1.1.5 起就有，不算新增暴露）。
+     * 万一以后轮换分享码，这个常量要跟着改，否则这条通道会 403 变成死链——
+     * 界面上会显示「（未连通）」，不会假装可用。
+     *
+     * <p><b>这个域名不能下线</b>：1.1.5 及更早的客户端把它写死在代码里，下线等于让老
+     * 用户失去官网更新通道。
+     */
+    private static final String SITE_CN = "https://zhishui-site.app.workbuddy.host";
+    private static final String SITE_CN_QUERY = "?sharecode=KLDDLXOQRD";
 
     private static final String[] CDNS = {
             "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
@@ -254,40 +272,39 @@ public class Update {
             if (ms == null) ms = new JSONArray();
             String name = latest.optString("apkName", "");
             if (!ver.isEmpty() && !name.isEmpty()) {
-                /* 官网直链无条件补上，且排第一。
+                /* 两条「官网直下」无条件排在最前，顺序固定：
+                   ① 国内直连（境内出口，不绕境外）② yuezao.org（Cloudflare 边缘）。
                    为什么不能只靠「清单里写了 mirrors」：check() 里 GitHub Release 接口
                    优先级最高（版本相同时胜过所有清单），而它返回的字段里根本没有 mirrors。
-                   只要 GitHub 通，官网就永远进不了下载地址列表——实测挑最快也就永远挑不到它。 */
-                String site = SITE_BASE + "/" + name;
-                if (!hasUrl(ms, site)) {
-                    JSONArray merged = new JSONArray();
-                    merged.put(site);
-                    for (int i = 0; i < ms.length(); i++) {
-                        String u = ms.optString(i, "");
-                        // 旧域名的官网链接（含已废弃的分享码）不再重复列，只保留 CDN 备用
-                        if (u.isEmpty() || u.equals(site) || isSiteUrl(u)) continue;
-                        merged.put(u);
-                    }
-                    ms = merged;
+                   只要 GitHub 通，官网就永远进不了下载地址列表——实测挑最快也就永远挑不到它。
+
+                   这里是整体重建而不是追加：天然幂等（重复调用不会翻倍），顺手清掉缓存 /
+                   旧清单里那些带分享码的旧域名链接，只保留非官网的 CDN 备用。 */
+                JSONArray merged = new JSONArray();
+                merged.put(SITE_CN + "/" + name + SITE_CN_QUERY);
+                merged.put(SITE_BASE + "/" + name);
+                boolean hasCdn = false;
+                for (int i = 0; i < ms.length(); i++) {
+                    String u = ms.optString(i, "");
+                    if (u.isEmpty() || isSiteUrl(u)) continue;
+                    hasCdn = true;
+                    merged.put(u);
                 }
                 // GitHub API 来源一条镜像都没有：再补两条 CDN，至少还有别的路可走
-                if (ms.length() <= 1) {
-                    for (String t : CDNS) ms.put(String.format(t, REPO, ver, name));
+                if (!hasCdn) {
+                    for (String t : CDNS) merged.put(String.format(t, REPO, ver, name));
                 }
+                ms = merged;
             }
             latest.put("mirrors", ms);
         } catch (Exception ignored) { }
         return latest;
     }
 
-    private static boolean hasUrl(JSONArray arr, String url) {
-        for (int i = 0; i < arr.length(); i++) {
-            if (url.equals(arr.optString(i, ""))) return true;
-        }
-        return false;
-    }
-
-    /** 官网地址：新域名裸链，或旧域名（1.1.5 及以前写死，缓存里可能还有）。 */
+    /**
+     * 官网地址：新域名裸链、旧域名（1.1.5 及以前写死，缓存里可能还有），
+     * 或境内直连的那份部署。三种都算「官网直下」，不能显示成「加速节点」。
+     */
     private static boolean isSiteUrl(String url) {
         return url != null && (url.contains("yuezao.org") || url.contains(".workbuddy.host"));
     }

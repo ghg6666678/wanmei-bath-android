@@ -3060,10 +3060,6 @@ function fmtDay(iso) {
   return m ? m[1] + '-' + m[2] + '-' + m[3] : String(iso).slice(0, 10);
 }
 
-function hostOf(u) {
-  try { return new URL(u).host; } catch (e) { return '镜像'; }
-}
-
 /* 用系统浏览器打开（安卓走原生 Intent，网页走新窗口），不占用 App 自己的 WebView */
 function openExternal(url) {
   if (!url) return;
@@ -3398,22 +3394,44 @@ function renderUpdate(res) {
     lb.className = 'lb';
     lb.textContent = '下载地址';
     alt.appendChild(lb);
-    const dlLabel = d => {
-      if (d.kind === 'github') return 'GitHub 直链 · github.com';
-      if (d.kind === 'site') return '官网直下 · ' + hostOf(d.url);
-      return '加速节点 · ' + hostOf(d.url);
-    };
+    /* 只说「这条通道是什么」，不写域名。域名对用户没有用处（他不需要记住、也没法判断
+       哪台机器好坏），反而像在把人往别的站引。真正有用的是实测延迟——它直接回答了
+       「点哪个最快」，所以延迟补在这里，取代原来的域名。 */
+    const dlKind = d => (d.kind === 'github' ? 'GitHub 直链'
+      : (d.kind === 'site' ? '官网直下' : '加速节点'));
+    /* 三种情况统合成同一张表再渲染，免得各写一套标签逻辑：
+       ① 有实测结果 → 按延迟升序，和「下载」按钮 pickDownload() 的口径一致，
+          排第一的就是真正会用到的那条；
+       ② 全都连不上 → 保留原顺序（那是「本该优先哪条」的意图），统一标「未连通」；
+       ③ 没有实测数据（旧缓存 / 内置清单）→ 原样列出。 */
+    let rows;
     if (dlOk && dlOk.length) {
-      dlOk.forEach(d => alt.appendChild(mkLink(dlLabel(d), d.url)));
+      rows = dlOk.slice()
+        .sort((a, b) => (a.ms > 0 ? a.ms : 1e9) - (b.ms > 0 ? b.ms : 1e9))
+        .map(d => ({ kind: d.kind, url: d.url, ms: d.ms, dead: false }));
     } else if (dlList) {
-      dlList.forEach(d => alt.appendChild(mkLink(dlLabel(d) + '（未连通）', d.url)));
+      rows = dlList.map(d => ({ kind: d.kind, url: d.url, ms: d.ms, dead: true }));
     } else {
-      /* 没有实测数据（旧缓存 / 内置清单），保持原来的列法 */
-      if (latest.apkUrl) alt.appendChild(mkLink('GitHub 直链 · github.com', latest.apkUrl));
-      (latest.mirrors || []).forEach(m => alt.appendChild(mkLink(
-        (String(m).indexOf('.workbuddy.host') >= 0 || String(m).indexOf('yuezao.org') >= 0
-          ? '官网直下 · ' : '加速节点 · ') + hostOf(m), m)));
+      const isSiteM = u => /yuezao\.org|workbuddy\.host/.test(String(u));
+      rows = [];
+      if (latest.apkUrl) rows.push({ kind: 'github', url: latest.apkUrl, dead: false });
+      (latest.mirrors || []).forEach(m => rows.push({
+        kind: isSiteM(m) ? 'site' : 'cdn', url: m, dead: false }));
     }
+    /* 同类多条时，光有类别名会分不清是哪一条：能显示延迟就靠延迟区分，不能就标「备用」。 */
+    const seen = {};
+    rows.forEach(r => {
+      const n = (seen[r.kind] = (seen[r.kind] || 0) + 1);
+      const hasMs = typeof r.ms === 'number' && r.ms > 0;
+      const showMs = hasMs && !r.dead;      /* 没连通的地址不显示延迟，说了也没意义 */
+      const tags = [];
+      if (n > 1 && !showMs) tags.push('备用');
+      if (r.dead) tags.push('未连通');
+      let label = dlKind(r);
+      if (tags.length) label += '（' + tags.join(' · ') + '）';
+      if (showMs) label += ' · ' + Math.round(r.ms) + 'ms';
+      alt.appendChild(mkLink(label, r.url));
+    });
     alt.appendChild(mkLink('GitHub · 全部版本与历史反馈', latest.releaseUrl || REPO_HOME));
     /* 网络限制是客观存在的：这里不承诺「点了一定能下」，而是给出可执行的退路。
        之前放过第三方代理镜像，实测会被劫持跳转到无关站点，已全部移除。 */
