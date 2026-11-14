@@ -1887,3 +1887,29 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 - 官网政策升到 **v2**，只新增第 16 节，1–15 节一字未改，并在页头写明这一点；
 - 应用内 `DISC_VER` 保持 `'1'`——**不因为官网加了一节就逼所有手机用户重读政策**；
 - `site-config.js` 的 `policyVersion` 从此按「站点政策」独立递增，两边共享的 1–15 节改动时才一起加。
+
+## 16. 隐私政策的联网更新（1.2.0）
+
+**痛点**：条文改一句就要发一次 APK，而用户未必升级——旧安装里写着旧条文，新条文却已生效，说不清「谁同意了什么」。发版成本高到会让人不想改政策（而这恰恰是最不该省的地方）。
+
+**做法**：内置一份 + 远程一份，远程版本更高才替换。
+
+- 内置：`assets/index.html` 的 `<template id="policyTpl">`，保证**首次安装、离线、拉取失败**时立刻有文本。
+- 远程：`site/policy.json` → 边缘直出为 `https://yuezao.org/policy.json`（`Cache-Control: no-store`，理由同 `latest.json`：一份被缓存的旧文本会让新用户「同意」作废条款，界面看起来却完全正常）。
+- 原生桥 `fetchPolicyAsync` 负责拉取（不用 WebView fetch 的理由：页面是 `file://` 源，跨域读取得靠 CORS，各家 WebView 行为不一致；原生 GET 没有这层不确定性，也不必给公开站点开 `Access-Control-Allow-Origin`）。
+- 拉到的原文存进 SharedPreferences（`policyCache`），下次启动**同步**装入再判断同意状态——否则断网重启会退回内置旧版本，版本号跳回去，同意状态直接错乱。
+
+**三条硬规则**：
+
+1. **只升不降**。远程版本必须严格大于当前版本，否则整份丢弃。否则旧文本被重放（CDN 缓存、误传、中间人），用户就会「同意」一个已作废的版本。
+2. **文本清洗**。远程 HTML 按白名单重建节点，只留 `div/p/h4/ul/ol/li/br/strong/b/em/i/span/a`，属性只有 `class`（限 `policy/pmeta/warn-red`）与 `href`（限 `http(s)/mailto`）。**必须**：页面挂着原生桥，一段注入的 `<script>` 等于远程拿到整个应用的权限；政策文本没有任何正当理由需要脚本。
+3. **同意绑定版本**。远程版本高于已同意的版本时，仍然弹锁定层（标题改成「隐私政策已更新」，上方显示版本、生效日期与变更摘要），滑到底才能同意。《个人信息保护法》第 14 条要求处理规则变更重新取得同意——热更新只省掉发版，不能省掉同意。
+
+**以后更新政策的操作**：
+
+1. 改 `site/policy.json`：`ver` +1（字符串数字）、`date` 换生效日期、`summary` 一句话说明改了什么、`html` 换正文。
+2. 可（不必）同步内置 `policyTpl`：内置只服务「从没联网成功过」的场景，允许滞后一版。
+3. `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`。
+4. 老用户下次启动会看到「已更新」，同意后才继续用。
+
+**还没统一的地方**：`site/privacy.html`（官网那个页面）是独立副本，改政策时要手工同步；`DISC_VER` 与 `policy.json` 的 `ver` 也必须人工保持一致（`policyApply` 只比较大小，不比内容）。这两处是当前唯一的漂移风险。

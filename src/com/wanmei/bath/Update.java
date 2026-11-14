@@ -597,8 +597,10 @@ public class Update {
         return dot;   // 以小数点结尾也算带后缀
     }
 
-    /** 简单 GET；失败抛异常，由调用方归类。 */
-    private static String httpGet(String url, int timeoutMs) throws Exception {
+    /** 简单 GET；失败抛异常，由调用方归类。
+        包可见（1.2.0 起）是为了让 MainActivity 拉隐私政策时复用同一套
+        超时、UA 与错误处理，不复制一份请求代码。 */
+    static String httpGet(String url, int timeoutMs) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(timeoutMs);

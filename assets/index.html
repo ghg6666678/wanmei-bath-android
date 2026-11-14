@@ -731,7 +731,7 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v1</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v3</strong> · 生效日期 <strong>2026-11-12</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
     <p>本政策说明「洗澡助手」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>
@@ -807,7 +807,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
 <!-- 首次启动的隐私政策（1.1.3.27，原免责声明）：锁定弹层，读完才能同意。不读完就点不动「同意并继续」——目的是让「已阅读」不是一句空话。 -->
 <div class="sheet" id="discFirst">
   <div class="bar-h"></div>
-  <h3>隐私政策</h3>
+  <h3 id="discTitle">隐私政策</h3>
+  <!-- 版本更新时才显示：说明「更新到哪一版、改了什么」，首次安装不出现 -->
+  <div class="tipnote" id="discUpd" style="display:none;margin:0 2px 10px"></div>
   <div class="hint" id="discBody"
        style="max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;line-height:1.85;font-size:13px"></div>
   <div class="tipnote" id="discTip" style="margin:10px 2px 0">请向下滑动读完全文</div>
@@ -1409,25 +1411,171 @@ function setStar(v) {
 /* 隐私政策是否已同意（1.1.3.25 起，原名免责声明）。存原生，理由同 firstRunShown：
    file:// 下 localStorage 不可靠，而这个标记决定了能不能用，更不能丢。
 
-   存的是【声明版本号】而不是布尔值：改一次条文就把 DISC_VER 加一，
+   存的是【声明版本号】而不是布尔值：条文改一次，生效版本号就加一，
    老用户的旧版本号对不上，下次启动会重新征求同意——这样弹层里那句
-   「内容变更时会重新征求同意」才是真的，不是空话。 */
-const DISC_VER = '3';   /* v3：第 6 节补官网通信方、第 8 节补境内说明；v2：新增第 16 节（官网反馈表单）、第 15 节补反馈渠道 */
-function discAccepted() {
+   「内容变更时会重新征求同意」才是真的，不是空话。
+
+   1.2.0 起版本号不再写死在这里：内置一份（离线兜底），启动后从官网拉
+   policy.json，远程版本更高就以远程为准（见下方「隐私政策的联网更新」）。
+   同意记录永远跟着【当前生效版本】比对，热更新的只是文本，不是同意。 */
+const DISC_VER = '3';   /* 内置版本：v3 第 6 节补官网通信方、第 8 节补境内说明；v2 新增第 16 节、第 15 节补反馈渠道 */
+/* 当前生效版本。初始等于内置版本，装上远程新版后变大；所有同意判断都用它。 */
+let __policyVer = DISC_VER;
+let __policyMeta = null;   /* { ver, date, summary }：远程版本自带的元信息 */
+
+function discAcceptedVer() {
   if (typeof Android !== 'undefined' && Android.getDiscAccepted) {
-    try { return Android.getDiscAccepted() === DISC_VER; } catch (e) { }
+    try { return Android.getDiscAccepted() || ''; } catch (e) { }
   }
-  try { return localStorage.getItem('discAccepted') === DISC_VER; } catch (e) { return false; }
+  try { return localStorage.getItem('discAccepted') || ''; } catch (e) { return ''; }
 }
+function discAccepted() { return discAcceptedVer() === __policyVer; }
 function setDiscAccepted(v) {
   if (typeof Android !== 'undefined' && Android.setDiscAccepted) {
-    try { Android.setDiscAccepted(v ? DISC_VER : ''); return; } catch (e) { }
+    try { Android.setDiscAccepted(v ? __policyVer : ''); return; } catch (e) { }
   }
   try {
-    if (v) localStorage.setItem('discAccepted', DISC_VER);
+    if (v) localStorage.setItem('discAccepted', __policyVer);
     else localStorage.removeItem('discAccepted');
   } catch (e) { }
 }
+
+/* ---------- 隐私政策的联网更新（1.2.0） ----------
+
+   痛点：条文改一句就要发一次 APK，而用户未必升级——旧版本里写着旧条文，
+   新条文却已经生效，说不清谁同意了什么。
+
+   做法：内置一份保证「首次安装 / 离线」立刻有文本；启动后向
+   https://yuezao.org/policy.json 拉一次，版本更高才替换并缓存。
+
+   三条硬规则（每条都对应一种真实的坏结果）：
+
+   ① 只升不降。远程版本必须严格大于当前版本，否则整份丢弃。否则一份旧
+      文本被重放（CDN 缓存、中间人、误传），用户就会「同意」一个已经作废
+      的版本，而界面看起来一切正常。
+
+   ② 文本清洗。远程 HTML 按白名单重建节点：脚本、事件属性(on*)、style、
+      iframe、未知标签全部丢掉，只保留政策文本用到的 div/p/h4/ul/li/
+      strong/br/span/a。这一条是必须的——页面里挂着原生桥
+      (Android.fetchPolicyAsync / setDiscAccepted...)，一段注入的 <script>
+      等于远程拿到了整个应用的权限。政策文本没有任何正当理由需要脚本。
+
+   ③ 同意绑定版本。远程版本高于已同意的版本时，仍然弹「隐私政策已更新」，
+      读到底才能点同意。《个人信息保护法》第 14 条要求处理规则变更重新
+      取得同意，所以「热更新」只省掉发版，不能省掉同意这一步。
+   ------------------------------------------------------------------ */
+const POLICY_URL = 'https://yuezao.org/policy.json';
+const POLICY_MAX_BYTES = 200 * 1024;   /* 正常 4KB，超过视为异常 */
+
+function policyNum(v) {
+  const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10);
+  return isFinite(n) ? n : 0;
+}
+
+/* 白名单只覆盖政策正文实际用到的标签；属性只有 class 与 href，
+   且 class 只认这三个（样式表里只定义了它们）。 */
+const POLICY_TAGS = {
+  DIV: ['class'], P: ['class'], H4: [], UL: [], OL: [], LI: [], BR: [],
+  STRONG: [], B: [], EM: [], I: [], SPAN: ['class'], A: ['href', 'class']
+};
+const POLICY_CLASS = { policy: 1, pmeta: 1, 'warn-red': 1 };
+
+function sanitizePolicy(html) {
+  const src = new DOMParser().parseFromString('<body>' + String(html || '') + '</body>', 'text/html');
+  const out = document.createElement('div');
+  const walk = (from, to) => {
+    const kids = from.childNodes;
+    for (let i = 0; i < kids.length; i++) {
+      const n = kids[i];
+      if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.nodeValue)); continue; }
+      if (n.nodeType !== 1) continue;              /* 注释、CDATA 一律丢弃 */
+      const attrs = POLICY_TAGS[n.tagName];
+      if (!attrs) { walk(n, to); continue; }       /* 未知标签：保留文字，丢掉标签 */
+      const el = document.createElement(n.tagName.toLowerCase());
+      if (attrs.indexOf('class') >= 0) {
+        const keep = String(n.getAttribute('class') || '').split(/\s+/).filter(c => POLICY_CLASS[c]);
+        if (keep.length) el.className = keep.join(' ');
+      }
+      if (n.tagName === 'A') {
+        const href = String(n.getAttribute('href') || '');
+        /* 只放行 http(s) 与 mailto；javascript:/data: 全部丢掉（丢掉 href 的
+           a 仍然渲染成文字，不会变成可点的坑）。 */
+        if (/^(https?:|mailto:)/i.test(href)) {
+          el.setAttribute('href', href);
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+      walk(n, el);
+      to.appendChild(el);
+    }
+  };
+  walk(src.body, out);
+  return out.innerHTML;
+}
+
+/* 装一份远程政策：只升不降，成功后版本号与元信息一起更新。
+   返回 true 表示「确实换成了新版本」。 */
+function policyApply(raw) {
+  let o;
+  try { o = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return false; }
+  if (!o || !o.ver || !o.html) return false;
+  if (String(o.html).length > POLICY_MAX_BYTES) return false;
+  const nv = policyNum(o.ver), cv = policyNum(__policyVer);
+  if (nv <= cv) return false;
+  const tpl = document.getElementById('policyTpl');
+  if (!tpl) return false;
+  const clean = sanitizePolicy(o.html);
+  if (!clean.trim()) return false;
+  tpl.innerHTML = clean;
+  __policyVer = String(nv);
+  __policyMeta = {
+    ver: String(nv),
+    date: String(o.date || ''),
+    summary: String(o.summary || '')
+  };
+  /* 两个展示点（首启锁定层 / 设置里）已填过旧文本，清空后按新模板重填 */
+  ['discBody', 'discSheetBody'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  fillPolicy();
+  return true;
+}
+
+/* 同步：先用上次缓存的新版本文本。断网重启也看到「上次拉到的最新版」，
+   而不是退回内置旧版——否则版本号会跳回去，同意状态直接错乱。 */
+function policyApplyCache() {
+  if (typeof Android === 'undefined' || !Android.getPolicyCache) return;
+  let raw = '';
+  try { raw = Android.getPolicyCache() || ''; } catch (e) { return; }
+  if (raw) policyApply(raw);
+}
+
+/* 异步：拉一次远程政策。静默失败——政策不是紧急路径，网络问题不该
+   拦住任何功能，内置文本永远可用。 */
+function policyRefresh() {
+  if (typeof Android === 'undefined' || !Android.fetchPolicyAsync) return;
+  try { Android.fetchPolicyAsync('policy'); } catch (e) { }
+}
+window.__onPolicy = function (id, json) {
+  let r;
+  try { r = JSON.parse(json); } catch (e) { return; }
+  if (!r || !r.ok) return;
+  if (!policyApply(r.body)) return;
+  /* 版本真的前进了才写缓存：缓存里存的永远是「当前渲染的这一版」 */
+  if (typeof Android !== 'undefined' && Android.setPolicyCache) {
+    try { Android.setPolicyCache(r.body); } catch (e) { }
+  }
+  if (discAccepted()) return;
+  /* 不打断正在进行的操作：有弹层（取码、登录、设置）就先等它关掉 */
+  const ask = () => {
+    if (discAccepted()) return;
+    if (document.querySelector('.sheet.on')) { setTimeout(ask, 1200); return; }
+    openFirstDisc(true);
+  };
+  setTimeout(ask, 900);
+};
 
 /* 余额提醒阈值（元）。存法与星标楼栋一致：原生优先，浏览器回落 localStorage。
    取值：'off'（关闭）或 '0.5' ~ '10'；空串/非法值回落到默认 5。
@@ -3371,9 +3519,27 @@ let __firstRunGuide = false;
 
 /* 1.1.3.25：首次启动必须先读完并同意隐私政策，之后才轮到校园卡引导。
    顺序反了会让引导先占住弹层（锁定态），隐私政策就弹不出来。 */
-function openFirstDisc() {
+function openFirstDisc(updated) {
   const body = $('#discBody'), yes = $('#discYes'), tip = $('#discTip');
   if (!body || !yes) return;
+  /* 政策更新后弹的是同一层，但要说清楚「你同意过的那版变了」：标题换成
+     「已更新」，并把版本、生效日期与变更摘要放在正文上方。首次安装不显示
+     这些——对新人来说没有「上一版」。 */
+  const title = $('#discTitle');
+  if (title) title.textContent = updated ? '隐私政策已更新' : '隐私政策';
+  const note = $('#discUpd');
+  if (note) {
+    if (updated && __policyMeta) {
+      let t = '已更新至 v' + __policyMeta.ver;
+      if (__policyMeta.date) t += '（' + __policyMeta.date + ' 生效）';
+      if (__policyMeta.summary) t += '：' + __policyMeta.summary;
+      note.textContent = t + '。请重新阅读并同意后继续使用。';
+      note.style.display = '';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+  if (updated) body.scrollTop = 0;   /* 新版从头读，别停在上一版读到的位置 */
   const check = () => {
     /* 留 8px 容差：部分 WebView 的 scrollHeight 会因缩放差一两像素 */
     const done = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
@@ -3416,12 +3582,21 @@ function fillPolicy() {
 }
 fillPolicy();
 
+/* 先把缓存里的远程版本装进来（同步、不发网络）。顺序必须在同意判断之前：
+   否则断网重启时退回内置旧版本，已同意的新版本号对不上，会误弹一次。 */
+try { policyApplyCache(); } catch (e) { }
+
 if (!discAccepted()) {
-  openFirstDisc();
+  /* 有历史同意记录 = 这次是「政策更新」，不是首次安装，标题与说明要区分 */
+  openFirstDisc(!!discAcceptedVer());
 } else if (!getFirstRunFlag()) {
   __firstRunGuide = true;
   openGuide();
 }
+
+/* 网络拉取放到首屏之后：政策更新不是紧急路径，不和启动抢资源；
+   失败静默，内置文本永远可用。 */
+setTimeout(() => { try { policyRefresh(); } catch (e) { } }, 1500);
 $('#guideOk').onclick = closeGuide;
 /* 「打开微信」：直接把微信拉起来让用户去小程序绑卡。
    不关弹层、也不写「已看过」——从小程序回来还得照着上面的步骤做，

@@ -204,6 +204,16 @@ public class MainActivity extends android.app.Activity {
         });
     }
 
+    /* 政策拉取的独立回调：不复用 __apiDone，避免和业务接口的 id 撞车
+       （业务侧的 pending 表按 id 索引，混进来一条会互相覆盖）。 */
+    private void postPolicy(String id, String json) {
+        final String js = "window.__onPolicy(" + JSONObject.quote(id) + ","
+                + JSONObject.quote(json) + ")";
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(js, null);
+        });
+    }
+
     private static String err(String msg) {
         try {
             JSONObject o = new JSONObject();
@@ -440,6 +450,52 @@ public class MainActivity extends android.app.Activity {
                     .putString("discAccepted", v == null ? "" : v).apply();
         }
 
+        /** 远程隐私政策的本地缓存（整份 JSON 原样保存）。
+            为什么缓存：政策更新后必须保证「你同意的是哪一版」可复现——
+            断网重启时若退回内置旧版，已同意的新版本号对不上，会误弹一次
+            重新同意；缓存能让离线状态下的文本与版本保持一致。 */
+        @JavascriptInterface
+        public String getPolicyCache() {
+            return getSharedPreferences("bath", MODE_PRIVATE).getString("policyCache", "");
+        }
+
+        @JavascriptInterface
+        public void setPolicyCache(String v) {
+            getSharedPreferences("bath", MODE_PRIVATE).edit()
+                    .putString("policyCache", v == null ? "" : v).apply();
+        }
+
+        /** 拉取远程隐私政策。走原生而不是让 WebView fetch：页面是 file:// 源，
+            跨域读取依赖 CORS，各家 WebView 表现不一致；原生 GET 没有这层
+            不确定性，也不必为了它给公开站点开 Access-Control-Allow-Origin。
+            超时/失败一律回 ok=false——拉不到政策不是错误，前端继续用内置文本，
+            不提示、不阻塞任何功能。 */
+        @JavascriptInterface
+        public void fetchPolicyAsync(final String id) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    JSONObject o = new JSONObject();
+                    try {
+                        String body = Update.httpGet(
+                                POLICY_URL + "?t=" + System.currentTimeMillis(), 8000);
+                        if (body == null || body.length() > 200 * 1024) {
+                            throw new IllegalStateException("policy too large");
+                        }
+                        o.put("ok", true);
+                        o.put("body", body);
+                    } catch (Throwable t) {
+                        try {
+                            o.put("ok", false);
+                            o.put("error", t.getMessage() == null
+                                    ? t.getClass().getSimpleName() : t.getMessage());
+                        } catch (Exception ignored) { }
+                    }
+                    postPolicy(id, o.toString());
+                }
+            }).start();
+        }
+
         /** 「验证码会显示在锁屏」的一次性场景告知是否看过（1.1.3.26）。
             与 discAccepted 分开存：一个是启动门槛，一个是首次发码时的提醒。 */
         @JavascriptInterface
@@ -549,6 +605,10 @@ public class MainActivity extends android.app.Activity {
        结果锁屏不显示。所以必须换一个新 id 重建，旧的在 ensureCodeChannel 里删掉。 */
     private static final String CH_CODE = "bath_code_v2";
     private static final String CH_CODE_OLD = "bath_code";
+    /* 远程隐私政策。必须 HTTPS + 自有域名：正文会渲染进带原生桥的页面，
+       写入权不能落在任何第三方手里（同源策略在这里不是安全边界，
+       真正的边界是「谁能改这个文件」）。 */
+    private static final String POLICY_URL = "https://yuezao.org/policy.json";
     private static final int NID_CODE = 1001;
     private static final int REQ_NOTIFY = 1001;
 
