@@ -35,10 +35,10 @@
 <article class="doc">
   <h1>隐私政策</h1>
 
-<!-- POLICY:BEGIN 本区由 tools/gen_policy.py 从 site/policy.json 生成，勿手改 sha256=43518bd16607 -->
-  <p class="pmeta">政策版本 <strong>v3</strong> · 生效日期 <strong>2026-11-13</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
+<!-- POLICY:BEGIN 本区由 tools/gen_policy.py 从 site/policy.json 生成，勿手改 sha256=a597d876db8e -->
+  <p class="pmeta">政策版本 <strong>v4</strong> · 生效日期 <strong>2026-11-14</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
 
-  <p class="pmeta">v3 相对 v2：第 6 节补充「官网」作为版本检查与安装包下载的通信方，第 8 节同步说明；v2 相对 v1：新增第 16 节（官网反馈表单），并把第 15 节的联系渠道补上官网反馈页。应用内与官网（本页）为同一份条文，均由本文件生成。</p>
+  <p class="pmeta">v4 相对 v3：第 6 节按实际链路列出 Cloudflare 边缘网络与 WorkBuddy 境内上游，第 8 节修正「官网由境内服务响应、不涉及跨境」的错误结论，第 16 节补充传输链路；v3 相对 v2：第 6 节补充「官网」作为版本检查与安装包下载的通信方，第 8 节同步说明；v2 相对 v1：新增第 16 节（官网反馈表单），并把第 15 节的联系渠道补上官网反馈页。应用内与官网（本页）为同一份条文，均由本文件生成。</p>
 
   <p>本政策说明「约澡」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
@@ -85,15 +85,21 @@
   <p>登录凭据与用户信息以 JSON 存于应用私有目录，保留至你退出登录或卸载；偏好设置保留至你修改或卸载；订单与余额仅作内存缓存。卸载应用即删除全部本地数据。</p>
 
   <h2 id="s6">6. 第三方</h2>
-  <p>完美校园水控平台（vwater.59wanmei.com、xqh5.17wanxiao.com）：登录与取码请求由你的设备直接发往该平台，由其按自身规则处理；jsDelivr / GitHub（cdn.jsdelivr.net、raw.githubusercontent.com）：版本检查与安装包下载会向其暴露 IP、User-Agent 与请求路径；官网（yuezao.org，本应用的官方网站，由 WorkBuddy 云服务托管）：版本清单检查与安装包下载会向其暴露 IP、User-Agent 与请求路径，官网反馈表单的数据处理见第 16 节。</p>
+  <p>本应用的登录与取码请求由你的设备直接发往<strong>完美校园水控平台</strong>（vwater.59wanmei.com、xqh5.17wanxiao.com），不经过开发者服务器。除此之外还有这些通信方：</p>
+  <ul>
+    <li><strong>Cloudflare</strong>（cloudflare.com，境外边缘服务商）：官网页面、版本清单、安装包与政策更新文件都由其边缘节点分发；这些请求会向其暴露 IP、User-Agent、请求路径与连接信息。</li>
+    <li><strong>WorkBuddy 云服务</strong>（境内）：官网反馈表单的存储方，见第 16 节。</li>
+    <li><strong>jsDelivr / GitHub</strong>（cdn.jsdelivr.net、raw.githubusercontent.com）：版本检查与安装包下载的备用来源，以及官网反馈页加载的 SDK；会向其暴露 IP、User-Agent 与请求路径。</li>
+  </ul>
+  <p>网页端是另一套界面，其请求链路与第三方见网页端内的政策，不适用本节。</p>
 
-  <h2 id="s7">7. 共享、转让与公开披露</h2>
+<h2 id="s7">7. 共享、转让与公开披露</h2>
   <p>除依法配合监管或司法机关外，本应用不向任何第三方提供你的个人信息；如未来发生运营主体变更，会提前在本政策与启动弹层中告知并重新取得同意。</p>
 
   <h2 id="s8">8. 跨境传输</h2>
-  <p>登录与业务数据不经过开发者服务器，也不向境外提供；版本检查与安装包下载可能由 jsDelivr 的境外节点响应，涉及 IP 与 User-Agent；官网的版本清单与安装包下载由境内服务响应，不涉及跨境。</p>
+  <p>登录与业务数据不经过开发者服务器，也不向境外提供。但官网、版本清单、安装包与政策更新文件经 <strong>Cloudflare 边缘网络</strong>分发，其节点可能位于中国境外；jsDelivr 的境外节点也可能响应备用下载。这些请求只涉及 IP、User-Agent、请求路径与连接信息，<strong>不含账号、登录凭据或洗澡业务数据</strong>。官网反馈表单的数据存于境内服务。</p>
 
-  <h2 id="s9">9. <span class="red">验证码明文显示</span>（重要）</h2>
+<h2 id="s9">9. <span class="red">验证码明文显示</span>（重要）</h2>
   <p>取码成功后，本应用会发送一条常驻通知，内容包含 <span class="red">明文验证码</span>，并请求系统把它提升为“灵动岛”（ColorOS 称「流体云」，澎湃 OS 叫「实时动态」）。是否提升由系统决定。</p>
   <p>一旦被提升，验证码不只是出现在<span class="red">通知栏</span>和<span class="red">锁屏</span>上，还可能显示在<span class="red">状态栏胶囊</span>与<span class="red">息屏显示</span>上：手机放在桌上、屏幕熄灭、未解锁时，旁边的人也可能直接看到。这是系统实时活动本来的形态，本应用无法限定它只在哪一层显示。</p>
   <p>关闭方式（按影响范围从小到大）：</p>
@@ -129,7 +135,7 @@
 
   <h2 id="s16">16. 官网反馈表单</h2>
   <p>本应用内没有反馈表单，也不会主动上传任何内容。官网的<a href="feedback.html">「问题反馈」页</a>会把你填写的内容存入云端数据库，包括：反馈正文、可选的联系方式、反馈类型、提交时官网显示的版本号、来源页面与浏览器 User-Agent。这些内容只有在你在网页上主动提交时才会产生。</p>
-  <p><strong>用途</strong>：仅用于定位问题和回复你，不用于广告或用户画像，不与任何第三方共享，由 <a href="https://www.workbuddy.cn" target="_blank" rel="noopener">WorkBuddy 云服务</a>托管。<strong>可见范围</strong>：网页端没有任何读取权限，只有管理员能查看。<strong>保留期限</strong>：处理完毕后保留不超过 12 个月。</p>
+  <p><strong>用途</strong>：仅用于定位问题和回复你，不用于广告或用户画像；除下列承载与传输服务外，不与任何第三方共享。数据存于 <a href="https://www.workbuddy.cn" target="_blank" rel="noopener">WorkBuddy 云服务</a>（境内）；提交请求与页面加载会经过 <strong>Cloudflare 边缘节点</strong>，页面还会从 <strong>jsDelivr</strong> 加载云服务 SDK。<strong>可见范围</strong>：网页端没有任何读取权限，只有管理员能查看。<strong>保留期限</strong>：处理完毕后保留不超过 12 个月。</p>
   <p>请不要填写账号密码、短信验证码、身份证号等敏感信息，反馈内容以明文存储。需要删除已提交的反馈，可通过<a href="#s15">第 15 节</a>的方式联系。</p>
   <!-- POLICY:END -->
 
