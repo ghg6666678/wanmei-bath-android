@@ -42,6 +42,10 @@ final class Diag {
     private static final Object LOCK = new Object();
     private static final java.util.ArrayList<String> LINES = new java.util.ArrayList<>();
     private static File file;
+    /** init 时记下的 Context，给 {@code msg()} 这类静态方法用（它们没有实例）。 */
+    private static Context app;
+    /** 节流表：key → 上次记录时间。断网时后台会自动刷新，不节流会把容量刷满。 */
+    private static final java.util.HashMap<String, Long> LAST = new java.util.HashMap<>();
 
     private Diag() { }
 
@@ -49,6 +53,7 @@ final class Diag {
     static void init(Context ctx) {
         File dir;
         try {
+            if (ctx != null && app == null) app = ctx.getApplicationContext();
             if (file != null) return;
             dir = ctx.getFilesDir();
         } catch (Throwable t) {
@@ -87,6 +92,36 @@ final class Diag {
     static void add(Context ctx, String kind, String where, String raw, String shown) {
         init(ctx);
         addLine(kind, where, raw, shown);
+    }
+
+    /** 给静态方法用的重载：Context 由 init() 记下。 */
+    static void add(String kind, String where, String raw, String shown) {
+        if (app == null) return;
+        add(app, kind, where, raw, shown);
+    }
+
+    /**
+     * 节流记录：同一个 key 在 gapMs 内只记一次。
+     *
+     * <p>为什么需要：断网时后台每几分钟自动刷新一次，每次都会失败。不节流的话，
+     * 几条真正的崩溃记录很快就被「又断网了」挤出 200 条窗口——那是诊断日志最坏的失效方式：
+     * 看起来有记录，需要的那条已经没了。
+     */
+    static void addThrottled(String key, long gapMs, String kind, String where, String raw, String shown) {
+        if (app == null) return;
+        if (!gatePass(key, gapMs)) return;
+        add(app, kind, where, raw, shown);
+    }
+
+    /** 时间闸门：同一个 key 在 gapMs 内只放行一次。抽出来单独验，免得节流失效没人发现。 */
+    static boolean gatePass(String key, long gapMs) {
+        synchronized (LOCK) {
+            long now = System.currentTimeMillis();
+            Long last = LAST.get(key);
+            if (last != null && now - last < gapMs) return false;
+            LAST.put(key, now);
+            return true;
+        }
     }
 
     /** 核心写入（不碰 Context，便于测试）。 */
@@ -130,6 +165,7 @@ final class Diag {
     static void clear(Context ctx) {
         synchronized (LOCK) {
             LINES.clear();
+            LAST.clear();
             try {
                 init(ctx);
                 if (file != null && file.exists()) {

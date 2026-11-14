@@ -289,7 +289,9 @@ public class MainActivity extends android.app.Activity {
                     o.put("message", "验证码已发送");
                     post(id, o.toString());
                 } catch (Exception e) {
-                    post(id, err(msg(e)));
+                    String shown = msg(e);
+                    Diag.add(MainActivity.this, "net", "sendCode", describe(e), shown);
+                    post(id, err(shown));
                 }
             }).start();
         }
@@ -324,7 +326,9 @@ public class MainActivity extends android.app.Activity {
                     o.put("config", publicConfig());
                     post(id, o.toString());
                 } catch (Exception e) {
-                    post(id, err(msg(e)));
+                    String shown = msg(e);
+                    Diag.add(MainActivity.this, "net", "doLogin", describe(e), shown);
+                    post(id, err(shown));
                 }
             }).start();
         }
@@ -404,7 +408,9 @@ public class MainActivity extends android.app.Activity {
                     o.put("data", String.valueOf(did));
                     post(id, o.toString());
                 } catch (Exception e) {
-                    post(id, err(msg(e)));
+                    String shown = msg(e);
+                    Diag.add(MainActivity.this, "net", "downloadApk", describe(e), shown);
+                    post(id, err(shown));
                 }
             }).start();
         }
@@ -426,7 +432,9 @@ public class MainActivity extends android.app.Activity {
                     JSONObject r = new Update().check(MainActivity.this, appVersionObj());
                     post(id, r.toString());
                 } catch (Exception e) {
-                    post(id, err(msg(e)));
+                    String shown = msg(e);
+                    Diag.add(MainActivity.this, "net", "checkUpdate", describe(e), shown);
+                    post(id, err(shown));
                 }
             }).start();
         }
@@ -1327,6 +1335,31 @@ public class MainActivity extends android.app.Activity {
                 || low.contains("<!doctype") || low.contains(" at com.");
     }
 
+    /**
+     * 异常摘要：类名 + message + 第一个「属于本项目」的栈帧。
+     *
+     * <p>不整段吞栈：栈动辄几十行、信息重复，200 条的窗口会被三五条撑满。类名决定「哪一类
+     * 问题」，message 决定「什么原因」，第一个自家栈帧决定「我们哪一行调用的」——排查够用了。
+     */
+    private static String describe(Throwable e) {
+        if (e == null) return "";
+        StringBuilder sb = new StringBuilder(e.getClass().getName());
+        String m = e.getMessage();
+        if (m != null && !m.isEmpty()) sb.append(": ").append(m);
+        StackTraceElement[] st = e.getStackTrace();
+        if (st != null) {
+            for (StackTraceElement el : st) {
+                String cn = el.getClassName();
+                if (cn != null && cn.startsWith("com.wanmei.bath")) {
+                    sb.append(" @").append(cn.substring(cn.lastIndexOf('.') + 1))
+                      .append('.').append(el.getMethodName()).append(':').append(el.getLineNumber());
+                    break;
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     private String handle(String path, String method, String bodyRaw) {
         /* /api/config 不要求登录：首次使用还没登录时，前端要靠它判断
            「这个号还没绑校园卡」，好给出绑定指引。 */
@@ -1335,13 +1368,23 @@ public class MainActivity extends android.app.Activity {
         }
         /* 断网时直接回一句话，不发请求、不等超时。这句会原样显示在 toast 上，
            所以必须是「网络未连接」而不是任何异常类名。 */
-        if (!Update.online(this)) return err(Update.NET_DOWN);
+        /* 这条路径**不产生任何异常**：前端收到的是「网络未连接」，它没有原文可记。
+           不在这里留痕，诊断页里就完全没有「断网」这回事——这正是第一版漏掉的地方。 */
+        if (!Update.online(this)) {
+            Diag.addThrottled("online " + path, 10 * 60 * 1000L, "net", "online 预检 " + path,
+                    "ConnectivityManager 判定当前无可用网络（请求未发出）", Update.NET_DOWN);
+            return err(Update.NET_DOWN);
+        }
         try {
             return dispatch(path, method, bodyRaw).toString();
         } catch (Api.Expired e) {
             return err("登录已失效，请重新登录");
         } catch (Exception e) {
-            return err(msg(e));
+            String shown = msg(e);
+            /* 原始异常只能在这里记：msg() 一改写，JS 就只看得到「网络未连接」，
+               SocketException / SSLHandshake / JSONException 的原文到不了前端。 */
+            Diag.add(this, "net", "api " + path, describe(e), shown);
+            return err(shown);
         }
     }
 
