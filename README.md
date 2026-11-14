@@ -34,7 +34,7 @@ https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhis
 
 - 安装包不含任何个人信息；登录凭据、姓名、学号、学校只存在应用私有目录，其他应用和 adb 读不到
 - 应用不采集设备信息、不埋点、不联网上报；权限只有 `INTERNET` 与 `ACCESS_NETWORK_STATE`，无 Service / Receiver / Provider
-- 版本检查与安装包下载会向 GitHub、jsDelivr 和官网暴露 IP、User-Agent 与请求路径；完整说明见 [隐私政策](https://yuezao.org/privacy-android.html)
+- 版本检查与安装包下载会向 GitHub、jsDelivr 和官网暴露 IP、User-Agent 与请求路径；完整说明见 [隐私政策](https://yuezao.org/privacy.html)
 - 仅供个人学习与自用，请使用自己的账号；不代登录、不批量操作，因使用产生的一切后果由使用者自行承担
 - 不收费、无内购、无广告、无第三方统计或 SDK；官网与仓库提供纯自愿、无对价的[微信赞赏码](https://yuezao.org/#support)，不影响任何功能。未上架任何应用商店，只在 Releases 与官网发布。源码全部公开，可自行核对
 
@@ -65,7 +65,7 @@ python tools/audit_apk.py --config ../web-app/config.json      # 可选：自检
 
 - [开发复盘](docs/DEVELOPMENT.md)：从构想到当前版本的完整流程、关键决策与踩过的坑（含官网、云服务与许可变更）；协议细节（请求地址、参数、签名规则）不展开，第三方服务条款通常禁止再发布这类资料
 - [接口说明](docs/API.md) · [消费记录的分页与缓存策略](docs/RECORDS_CACHE.md) · [贡献说明](CONTRIBUTING.md)
-- [更新日志](https://yuezao.org/changelog.html) · [隐私政策](https://yuezao.org/privacy-android.html) · [问题反馈](https://yuezao.org/feedback.html)（官网，不用 GitHub 账号也能留言）
+- [更新日志](https://yuezao.org/changelog.html) · [隐私政策](https://yuezao.org/privacy.html) · [问题反馈](https://yuezao.org/feedback.html)（官网，不用 GitHub 账号也能留言）
 
 ## 参考实现
 
