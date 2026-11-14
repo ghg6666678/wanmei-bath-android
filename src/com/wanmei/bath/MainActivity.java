@@ -240,6 +240,7 @@ public class MainActivity extends android.app.Activity {
             new Thread(() -> {
                 try {
                     if (phone == null || phone.trim().length() < 11) throw new Login.Err("手机号格式不对");
+                    if (!Update.online(MainActivity.this)) throw new Login.Err(Update.NET_DOWN);
                     Login lg = getLogin();
                     lg.sendCode(phone.trim());
                     JSONObject o = new JSONObject();
@@ -258,6 +259,7 @@ public class MainActivity extends android.app.Activity {
             new Thread(() -> {
                 try {
                     if (code == null || code.trim().length() < 4) throw new Login.Err("验证码不完整");
+                    if (!Update.online(MainActivity.this)) throw new Login.Err(Update.NET_DOWN);
                     Login lg = getLogin();
                     JSONObject user = lg.loginSms(phone.trim(), code.trim());
 
@@ -1149,10 +1151,67 @@ public class MainActivity extends android.app.Activity {
         return o;
     }
 
-    private static String msg(Exception e) {
-        String m = e.getMessage();
-        if (m == null || m.isEmpty()) m = e.getClass().getSimpleName();
+    /**
+     * 把异常翻译成用户能看懂的一句话。
+     *
+     * <p>原则：只有**网络层**的异常才被改写，业务错误（「验证码错误」「登录已失效」）
+     * 一律原样保留——那些话是本地抛的，本来就说人话，改写反而把有用信息抹掉。
+     *
+     * <p>三层判断，缺一层都会漏出原始报错：
+     * <ol>
+     *   <li>按异常类型：连不上（UnknownHost / Connect / NoRouteToHost）→ 网络未连接；
+     *       超时（SocketTimeout）→ 连接超时。注意 <b>Connect 与 NoRoute 不是超时</b>，
+     *       它们是「根本没有路」，说成「超时」会让用户去怪网速。</li>
+     *   <li>按文案关键词：有些网络异常是同一个类型、不同说法（{@code SocketException:
+     *       Network is unreachable}、{@code Connection reset}），类型判断接不住。</li>
+     *   <li>兜底：**凡是看起来像异常类名 / 技术细节的文本，一律不许上界面**。以前只做前两层，
+     *       于是 {@code java.net.SocketException: Network is unreachable}、
+     *       {@code SSLHandshakeException}、以及校园网认证页导致的
+     *       {@code JSONException: Value <html> ...} 会原样弹给用户。</li>
+     * </ol>
+     */
+    private static String msg(Throwable e) {
+        if (e == null) return Update.NET_DOWN;
+        boolean timeout = false, tls = false;
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.UnknownHostException
+                    || t instanceof java.net.ConnectException
+                    || t instanceof java.net.NoRouteToHostException
+                    || t instanceof java.net.PortUnreachableException) {
+                return Update.NET_DOWN;
+            }
+            if (t instanceof java.net.SocketTimeoutException) timeout = true;
+            /* TLS 握手被打断（校园网认证页、中间设备干扰）是最常见的一类「连了但用不了」。
+               SSLHandshakeException 的 message 常常只是 "Connection closed by peer"，
+               类型之外的线索一句都没有，所以必须按类型认。 */
+            if (t instanceof javax.net.ssl.SSLException) tls = true;
+        }
+        String m = e.getMessage() == null ? "" : e.getMessage();
+        String low = m.toLowerCase(java.util.Locale.ROOT);
+        if (timeout || low.contains("timed out") || low.contains("timeout")) return Update.NET_SLOW;
+        if (low.contains("network is unreachable") || low.contains("unable to resolve host")
+                || low.contains("no address associated") || low.contains("econnrefused")
+                || low.contains("econnreset") || low.contains("enetunreach")
+                || low.contains("connection reset") || low.contains("failed to connect")
+                || low.contains("broken pipe")) return Update.NET_DOWN;
+        if (tls || low.contains("handshake") || low.contains("connection closed")) return Update.NET_ERR;
+        if (m.isEmpty()) return Update.NET_ERR;
+        /* 走到这里还像异常，就说明是我们没预料到的形状——宁可用一句通用的话，
+           也不要把类名和栈信息丢给用户。业务错误不会长成这样，不会被误伤。 */
+        if (technical(m)) return Update.NET_ERR;
         return m;
+    }
+
+    /** 文本像不像「异常类名 + 技术细节」。像，就不许直接展示。 */
+    private static boolean technical(String m) {
+        if (m.matches("(?s)[\\w.$]+(Exception|Error|Throwable)\\b.*")) return true;
+        String low = m.toLowerCase(java.util.Locale.ROOT);
+        return low.startsWith("java.") || low.startsWith("javax.") || low.startsWith("org.json")
+                || low.startsWith("android.")
+                || low.contains("exception:") || low.contains("cannot be converted")
+                || low.contains("unexpected end of") || low.contains("failed to parse")
+                || low.contains("unexpected token") || low.contains("<html")
+                || low.contains("<!doctype") || low.contains(" at com.");
     }
 
     private String handle(String path, String method, String bodyRaw) {
@@ -1161,6 +1220,9 @@ public class MainActivity extends android.app.Activity {
         if (!api.hasToken() && !path.startsWith("/api/config")) {
             return err("还没有登录，请先用手机号登录");
         }
+        /* 断网时直接回一句话，不发请求、不等超时。这句会原样显示在 toast 上，
+           所以必须是「网络未连接」而不是任何异常类名。 */
+        if (!Update.online(this)) return err(Update.NET_DOWN);
         try {
             return dispatch(path, method, bodyRaw).toString();
         } catch (Api.Expired e) {

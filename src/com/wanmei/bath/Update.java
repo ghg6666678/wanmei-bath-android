@@ -59,6 +59,41 @@ public class Update {
     private static final int KIND_API = 0;    // GitHub Release 接口
     private static final int KIND_MANIFEST = 1; // latest.json 清单
 
+    /** 断网时给用户的唯一说法。整条链路上不出现 {@code java.net.*} 类名。 */
+    public static final String NET_DOWN = "网络未连接";
+    /** 有网但连不上时的说法：超时、连接被拒都归这一句。 */
+    public static final String NET_SLOW = "网络连接超时，请重试";
+    /**
+     * 说不清具体原因的失败（SSL 握手被打断、校园网认证页返回 HTML 导致 JSON 解析失败……）。
+     * 该说的一句人话，同时保证任何异常类名都不会出现在界面上。
+     */
+    public static final String NET_ERR = "网络不太稳定，请稍后重试";
+
+    /**
+     * 当前有没有可用网络。
+     *
+     * <p>为什么先查一遍再发请求：断网时每个通道各自失败，抛上来的是
+     * {@code java.net.UnknownHostException: Unable to resolve host ...} 这类东西，
+     * 对用户没有任何意义，而且还要等满超时才回来。查一次只要几毫秒。
+     *
+     * <p>查不到、或者系统不给能力信息时<b>按「有网」处理</b>——宁可走正常流程失败，
+     * 也不要因为读不到状态把一个能用的网络拦下来。
+     */
+    public static boolean online(Context ctx) {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            android.net.Network n = cm.getActiveNetwork();
+            if (n == null) return false;
+            android.net.NetworkCapabilities c = cm.getNetworkCapabilities(n);
+            return c != null
+                    && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
     /**
      * 下载加速：只走 jsDelivr 这类有企业背书的 CDN，**绝不内置免费代理域名**。
      *
@@ -142,6 +177,23 @@ public class Update {
             tried.add("本地清单");
         }
 
+        /* ---- 断网：直接给结论，一个请求都不发 ----
+           不能省这一步：五个通道会各自超时（最长等满 6 秒），最后落到缓存的 error
+           还是「连不上 GitHub」——用户明明没网，界面却在怪 GitHub，而且白等。
+           有缓存就用缓存（离线时仍能告诉他「已知最新版是哪个」），没有就只剩内置清单。 */
+        if (!online(ctx)) {
+            JSONObject cachedOff = readCache(ctx);
+            JSONObject fallback = cachedOff != null ? cachedOff : known;
+            List<String> triedOff = new ArrayList<>();
+            triedOff.add(NET_DOWN + "，未做在线检测");
+            if (fallback == null) {
+                return result(false, current, null, "", false, NET_DOWN, triedOff);
+            }
+            return result(true, current, withDownload(fallback),
+                    cachedOff != null ? "上次检测结果（缓存）" : knownSource,
+                    true, NET_DOWN, triedOff);
+        }
+
         // ---- 网络层：并行探测 ----
         List<Source> probes = new ArrayList<>();
         /* 官网排第一：国内可达性最好，而且不依赖任何第三方。它读的是我们自己发布的
@@ -215,18 +267,18 @@ public class Update {
         JSONObject cached = readCache(ctx);
         if (cached != null) {
             return result(true, current, withDownload(cached), "上次检测结果（缓存）", true,
-                    "连不上 GitHub", tried);
+                    "没能连上更新服务器", tried);
         }
 
         // ---- 只剩本地层 ----
         if (known != null) {
             return result(true, current, withDownload(known), knownSource, true,
-                    "连不上 GitHub", tried);
+                    "没能连上更新服务器", tried);
         }
 
         // ---- 连本地清单都没有（正常不会发生） ----
         return result(false, current, null, "", false,
-                "无法连接 GitHub，且本地没有可用清单。请手动到项目主页下载新版", tried);
+                "连不上更新服务器，且本地没有可用清单。请手动到项目主页下载新版", tried);
     }
 
     // ================= 结果组装 =================

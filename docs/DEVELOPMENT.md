@@ -1883,6 +1883,33 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 **多端对照**（按 12.32 的规则）：网页端没有「检查更新」（刷新即最新，已在 12.32 判定为合理差异），`web-app/web/index.html` 无需同步；官网首页的下载按钮走同域相对路径，不经过这个列表，也不显示域名，同样不用改。
 
+### 12.35 断网时不许把原始报错丢给用户（1.2.0 发版前）
+
+用户要求：进软件时没网，不要抛原始报错，要说「网络未连接」。
+
+查下来「早就做了一半」——这条路本来有三层改写，但**每一层都留了一道缝**：
+
+| 层 | 原状 | 缝在哪 |
+| --- | --- | --- |
+| 原生 `Update.online()` | 发请求前先查网络，断了直接回 `NET_DOWN` | 只认「系统说没网」；连着 Wi-Fi 但出不去（认证页、断上行）时仍然发请求 |
+| 原生 `MainActivity.msg()` | 按异常**类型**翻译 | `ConnectException` / `NoRouteToHostException` 被归成「超时」，让用户去怪网速；`SocketException: Network is unreachable`、`SSLHandshakeException`（文案只有 `Connection closed by peer`）、认证页导致的 `JSONException: Value <!DOCTYPE …>` 全都不在名单里，原样上屏 |
+| 前端 `netText()` | 按关键词翻译 | 与上面同一批形状对不上；且 `__apiDone` 解析失败时抛的是「返回解析失败」这种开发期措辞，用户看到等于没看到 |
+
+**改法：把「原始报错不可能出现在界面上」当成不变量来做**，两端同构：
+
+1. **三层判断**：① 类型（UnknownHost / Connect / NoRouteToHost / PortUnreachable → 网络未连接；SocketTimeout → 超时；`SSLException` → 通用句）；② 文案关键词（network is unreachable、connection reset、econnrefused…）；③ **兜底**——凡是「像异常类名或技术细节」的文本（`^[\w.$]+(Exception|Error)`、`java.`、`org.json`、`exception:`、`<html`…）一律换成「网络不太稳定，请稍后重试」。
+2. **业务错误必须原样保留**：判据收得窄，「验证码错误」「登录已失效」「该浴室当前无法预约」都不命中兜底，22 项断言里有 4 项专门守这条。
+3. **顺手修掉两处误导**：`ConnectException` 从「超时」改成「未连接」；`__apiDone` / `r.json()` 的「返回解析失败」改成「网络不太稳定，请稍后重试」——解析失败最常见的原因是公共 Wi-Fi 认证页把响应换成了 HTML，那属于网络问题，不是我们写错了。
+4. **进软件那一眼的体验**（两端一致）：屏幕上没有数据时给一块明确的空态（「网络未连接 / 连上网络后下拉刷新一下」）；**已经有数据时刷新失败不清空**——刷新失败不等于数据没了，切成空态比不刷新更像出了大事；同一种失败连着来只说一次（否则后台每 3 分钟自动刷新就念一遍）。下拉刷新失败时也不再补一句「已刷新」。
+
+**验证**（不依赖真机，全部可重复）：
+
+- Java 反射 harness 直接调 `MainActivity.msg()`，22 项：断网 8 种形状、超时 2 种、说不清 6 种（含 `SSLHandshakeException: Connection closed by peer`、认证页 HTML）、业务错误 4 种。
+- jsdom harness 载入真实的 `assets/index.html`，用假原生桥回放各种失败：冷启动断网（首页文案 + 无类名 + toast）、重复失败只说一次、原生抛 `SocketException` 被归一化、已有内容时不清空、超时/解析失败各自的说法、业务错误带原文，共 14 项。
+- 网页端同结构的 harness 8 项 + `netText` 表 8 条。**网页端更容易漏**：它「从没登录过就一次请求都不发、直接摆登录框」，所以断网首屏表现要在 `loggedOnce=1` 的前提下才测得到。
+
+**多端对照**（12.32 规则）：`web-app/web/index.html` 同步了 `netText` / 兜底 / 不清空 / 只说一次，并升 `WEB_BUILD` 到 `2026.11.15`、补一条更新日志。两端文案唯一的差异是空态里「下拉刷新」与「刷新一下页面」——这是平台差异，不是漂移。
+
 ## 13. 小结
 
 从「想分析客户端」到「发现业务在 H5」，从「必须依赖额外权限与官方客户端」到「手机号 + 验证码纯登录」，从「一个能跑的网页」到「一份可覆盖安装、可审计、可回滚的 APK」——整个过程真正起作用的不是某个技巧，而是几次及时的**边界判断**：
