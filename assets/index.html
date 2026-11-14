@@ -3609,11 +3609,35 @@ function bindPolicyLinks() {
       const url = /^(https?:|mailto:)/i.test(raw) ? raw
         : raw.charAt(0) === '#' ? SITE_ORIGIN + '/privacy-android.html' + raw
         : SITE_ORIGIN + '/' + raw.replace(/^\/+/, '');
+      /* 「第 15 节」这类引用指向的就是这份政策自己的某一节，不是外部页面。
+         应用内弹层里本来就有这一节，滚过去即可；而且官网的拆分页面要随
+         Cloudflare 部署才存在，部署前打开会得到 404 空响应
+         （ERR_HTTP_RESPONSE_CODE_FAILURE）。旧缓存里的 #sN 拼完基址后
+         同样命中这里，不会漏出去。 */
+      const sec = /yuezao\.org\/privacy[^#]*#s(\d+)$/i.exec(url);
       e.preventDefault();
       e.stopPropagation();
+      if (sec) { jumpPolicySection(box, sec[1]); return; }
       openExternal(url);
     });
   });
+}
+
+/* 滚到弹层里的第 N 节。标题是 <h4>（官网渲染时才变成带 id 的 <h2>），
+   所以按「N. 开头」找；找不到再按序号兜底。滚动量用两个矩形的差换算，
+   不能用 offsetTop——它的参照系未必是这个滚动容器。 */
+function jumpPolicySection(box, num) {
+  const hs = box.querySelectorAll('h4');
+  if (!hs.length) return;
+  let target = null;
+  const re = new RegExp('^' + num + '\\s*[.、]');
+  for (let i = 0; i < hs.length; i++) {
+    if (re.test(hs[i].textContent.trim())) { target = hs[i]; break; }
+  }
+  if (!target && hs.length >= +num) target = hs[num - 1];
+  if (!target) return;
+  const delta = target.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  box.scrollTop = Math.max(0, box.scrollTop + delta - 6);
 }
 
 /* 政策正文只维护一份（<template id="policyTpl">），启动弹层和设置里各自克隆。

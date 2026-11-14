@@ -1847,9 +1847,15 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 - 应用内新增 `bindPolicyLinks()`：在 `#discBody` / `#discSheetBody` 上做容器级 click 委托，一律 `preventDefault` 后交给 `openExternal()`（系统浏览器）。容器级委托使 `policyApply()` 换掉 innerHTML 后依然生效；只限政策容器，不碰通知提示里靠 `onclick` 跳第 9 条的那个 `javascript:void(0)` 链接。对旧缓存里残留的相对路径 / 锚点也做了拼接兜底。
 - 原生 `handleScheme()` 改为只放行 `file://`，http(s)/mailto/自定义 scheme 一律交给系统浏览器，作为 `target=_blank` 等情况下的兜底。
 
-**验证**：独立 harness 载入真实的 `sanitizePolicy` 与 `bindPolicyLinks`，mock `openExternal`，逐个点击 5 个真实链接 + 3 个旧缓存链接，8 项全部「已阻止默认行为 + 正确 URL 交给浏览器」，`javascript:void(0)` 保持不被拦截。
+**验证**：独立 harness 载入真实的 `sanitizePolicy` 与 `bindPolicyLinks`，mock `openExternal`，逐个点击 5 个真实链接 + 3 个旧缓存链接；最初的 8 项全部交给浏览器，按下方后续修订把章节引用改成弹层内滚动后重跑，8 项仍全 PASS。
 
 **多端对照**（按 12.32 立的规则）：网页端政策 `policy-web.json` 里 0 个链接，且网页端本身运行在浏览器中，没有 WebView 这层问题，因此 `web-app/web/index.html` 与 `web-shell.html` 一行未改；两份政策的链接口径由生成器同一条自检约束，避免以后一边加链接一边漂移。
+
+> **同日后续（部署前实测发现）**：把「第 15 节」也绝对化成 `https://yuezao.org/privacy-android.html#s15` 是过度解读——它是**同一份政策内部的章节引用**，不是外部页面。两个后果：① 应用内点它要跳出浏览器，而弹层里本来就有这一节；② 官网拆分出来的 `privacy-android.html` 要随 Cloudflare 部署才存在，部署前线上实测是 **HTTP 404、响应体 0 字节**，Chrome 直接报 `ERR_HTTP_RESPONSE_CODE_FAILURE`。线上 `privacy.html` 当时还是旧单页，里面是 `<a href="#s15">` 页内锚点，所以报错只会来自应用内弹层。
+>
+> 修法：`bindPolicyLinks()` 先识别 `yuezao.org/privacy…#sN`，命中就 `preventDefault` 并调用 `jumpPolicySection(box, N)` 滚到弹层内对应的 `<h4>`（按「N. 开头」找，滚动量用两个矩形的差换算，复用 `openPolicy()` 的算法），不调用 `openExternal`；其余 4 个外部链接照常交给系统浏览器。旧缓存里的 `#sN` 拼完基址后同样命中，不会漏出去。政策源、生成器、五处产物、`ver=5` 与组合指纹都没变，只需重打 APK。
+>
+> **分类口径**（以后加政策链接照此判断）：指向**别处**（反馈页、项目主页、第三方站点）→ 绝对地址 + 浏览器打开；指向**本政策自身的小节** → 源里仍写绝对地址（护栏要求），但官网渲染回退成 `#sN`、应用内滚到对应小节，两端都不出网。另有一条时序经验：**凡是引用新建的官网页面，都要先问「部署前存不存在」**——和 README 链接改回入口页、避免推送与部署之间 404 是同一类坑。
 
 ## 13. 小结
 
