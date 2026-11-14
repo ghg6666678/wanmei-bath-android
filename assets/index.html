@@ -3404,7 +3404,8 @@ function renderUpdate(res) {
       /* 没有实测数据（旧缓存 / 内置清单），保持原来的列法 */
       if (latest.apkUrl) alt.appendChild(mkLink('GitHub 直链 · github.com', latest.apkUrl));
       (latest.mirrors || []).forEach(m => alt.appendChild(mkLink(
-        (String(m).indexOf('.workbuddy.host') >= 0 ? '官网直下 · ' : '加速节点 · ') + hostOf(m), m)));
+        (String(m).indexOf('.workbuddy.host') >= 0 || String(m).indexOf('yuezao.org') >= 0
+          ? '官网直下 · ' : '加速节点 · ') + hostOf(m), m)));
     }
     alt.appendChild(mkLink('GitHub · 全部版本与历史反馈', latest.releaseUrl || REPO_HOME));
     /* 网络限制是客观存在的：这里不承诺「点了一定能下」，而是给出可执行的退路。

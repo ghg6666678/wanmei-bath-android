@@ -72,17 +72,18 @@ public class Update {
      * 返回上一版的文件），而每个版本的 tag 都是全新引用，没有缓存，立刻可用。
      */
     /**
-     * 本项目官网（WorkBuddy 托管）。两个用途：版本清单的来源之一，以及安装包的下载源。
+     * 本项目官网（Cloudflare 边缘直出）。两个用途：版本清单的来源之一，以及安装包的下载源。
      *
      * <p>为什么需要它：GitHub 系在国内的可达性完全看运气——api.github.com 被墙时，
-     * 下面的三个清单源会**一起**失败，用户就只能看到「连不上 GitHub」，明明有网也更新不了。
-     * 官网是同一个作者控制、且国内通常能直接打开的地址，把它加进清单来源就补上了这个洞。
+     * 下面几个清单源会**一起**失败，用户就只能看到「连不上 GitHub」，明明有网也更新不了。
+     * 官网是同一个作者控制、且国内通常能直接打开的地址，把它加进来就补上了这个洞。
      *
-     * <p>站点用分享码控制访问，所以链接必须带 {@code ?sharecode=}；不带会拿到 403 页面
-     * （不是 JSON，解析会失败并自动跳到下一个源，不会崩）。
+     * <p>1.2.0 起用 yuezao.org：官网全链路不校验分享码，裸链即可，因此这里不再拼
+     * {@code ?sharecode=}。旧域名 {@code zhishui-site.app.workbuddy.host} 是 1.1.5 及
+     * 以前客户端写死的，**服务端必须继续留着**，但新客户端不再使用；缓存里若还留着
+     * 旧链接，{@link #isSiteUrl(String)} 仍会把它认成「官网直下」而不是 CDN。
      */
-    private static final String SITE_BASE = "https://zhishui-site.app.workbuddy.host";
-    private static final String SITE_CODE = "KLDDLXOQRD";
+    private static final String SITE_BASE = "https://yuezao.org";
 
     private static final String[] CDNS = {
             "https://cdn.jsdelivr.net/gh/%s@v%s/release/%s",
@@ -126,9 +127,8 @@ public class Update {
         // ---- 网络层：并行探测 ----
         List<Source> probes = new ArrayList<>();
         /* 官网排第一：国内可达性最好，而且不依赖任何第三方。它读的是我们自己发布的
-           latest.json，字段与 jsDelivr 那几条完全一致。 */
-        probes.add(new Source(KIND_MANIFEST, "官网清单",
-                SITE_BASE + "/latest.json?sharecode=" + SITE_CODE));
+           latest.json，字段与 jsDelivr 那几条完全一致。裸链即可，不需要分享码。 */
+        probes.add(new Source(KIND_MANIFEST, "官网清单", SITE_BASE + "/latest.json"));
         probes.add(new Source(KIND_API, "GitHub 官方接口",
                 "https://api.github.com/repos/" + REPO + "/releases/latest"));
         // 曾经这里有一条 ghproxy.cn 的镜像通道，2026-11 因该域名跳转色情站点已删除。
@@ -250,17 +250,46 @@ public class Update {
                         : "https://github.com/" + REPO + "/releases/tag/v" + ver;
                 latest.put("releaseUrl", rel);
             }
-            if (!latest.has("mirrors")) {
-                JSONArray ms = new JSONArray();
-                String name = latest.optString("apkName", "");
-                // 只有「仓库里有这个 APK」时才有 CDN 地址可拼；Release 资产 CDN 取不到。
-                if (!ver.isEmpty() && !name.isEmpty()) {
+            JSONArray ms = latest.optJSONArray("mirrors");
+            if (ms == null) ms = new JSONArray();
+            String name = latest.optString("apkName", "");
+            if (!ver.isEmpty() && !name.isEmpty()) {
+                /* 官网直链无条件补上，且排第一。
+                   为什么不能只靠「清单里写了 mirrors」：check() 里 GitHub Release 接口
+                   优先级最高（版本相同时胜过所有清单），而它返回的字段里根本没有 mirrors。
+                   只要 GitHub 通，官网就永远进不了下载地址列表——实测挑最快也就永远挑不到它。 */
+                String site = SITE_BASE + "/" + name;
+                if (!hasUrl(ms, site)) {
+                    JSONArray merged = new JSONArray();
+                    merged.put(site);
+                    for (int i = 0; i < ms.length(); i++) {
+                        String u = ms.optString(i, "");
+                        // 旧域名的官网链接（含已废弃的分享码）不再重复列，只保留 CDN 备用
+                        if (u.isEmpty() || u.equals(site) || isSiteUrl(u)) continue;
+                        merged.put(u);
+                    }
+                    ms = merged;
+                }
+                // GitHub API 来源一条镜像都没有：再补两条 CDN，至少还有别的路可走
+                if (ms.length() <= 1) {
                     for (String t : CDNS) ms.put(String.format(t, REPO, ver, name));
                 }
-                latest.put("mirrors", ms);
             }
+            latest.put("mirrors", ms);
         } catch (Exception ignored) { }
         return latest;
+    }
+
+    private static boolean hasUrl(JSONArray arr, String url) {
+        for (int i = 0; i < arr.length(); i++) {
+            if (url.equals(arr.optString(i, ""))) return true;
+        }
+        return false;
+    }
+
+    /** 官网地址：新域名裸链，或旧域名（1.1.5 及以前写死，缓存里可能还有）。 */
+    private static boolean isSiteUrl(String url) {
+        return url != null && (url.contains("yuezao.org") || url.contains(".workbuddy.host"));
     }
 
     // ================= 下载地址实测 =================
@@ -322,12 +351,12 @@ public class Update {
                 d.put("ok", okFlags[i]);
                 d.put("ms", cost[i]);
                 /* 三种来源在界面上要能分开说：GitHub 直链 / 官网直下 / 第三方 CDN。
-                   官网那条是本项目自己的站点（WorkBuddy 托管），国内通常最快，
-                   但它依赖分享码，链接换站点就会失效——所以只认域名，不认整条地址。 */
+                   只认域名，不认整条地址——缓存里可能还留着旧域名加分享码的链接，
+                   它同样是官网，不能显示成「加速节点」。 */
                 String kind;
                 if (!apk.isEmpty() && i == 0) {
                     kind = "github";
-                } else if (arr[i].contains(".workbuddy.host")) {
+                } else if (isSiteUrl(arr[i])) {
                     kind = "site";
                 } else {
                     kind = "cdn";
@@ -409,6 +438,11 @@ public class Update {
         o.put("notes", j.optString("notes", ""));
         o.put("apkName", j.optString("apkName", ""));
         o.put("apkUrl", j.optString("apkUrl", ""));
+        /* 以前这里漏了 mirrors（和 sha256）：清单里明明写了官网直下，解析时被丢掉，
+           withDownload() 见没有 mirrors 就只用 CDNS 现拼两条 jsDelivr。前端和
+           attachDownloads() 都给「官网直下」留了分类与文案，却永远用不上。 */
+        if (j.has("mirrors")) o.put("mirrors", j.optJSONArray("mirrors"));
+        if (j.has("sha256")) o.put("sha256", j.optString("sha256", ""));
         return o;
     }
 
