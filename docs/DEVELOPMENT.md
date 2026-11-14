@@ -10,6 +10,23 @@
 
 ---
 
+## 架构现状（2026-11-14 起）
+
+> 本文 12 / 14 / 15 章是**按版本推进的历史复盘**：里面出现的 `zhishui-site.app.workbuddy.host`、`?sharecode=`、GitHub Pages / WorkBuddy 发布、`site-config.js` 的 `policyVersion`，都是当时的事实，**不是现在怎么做**。现行架构以本节与 `web-app/README.md` 为准。
+
+| 层 | 谁响应 | 承担什么 |
+| --- | --- | --- |
+| 公开域名 | Cloudflare Worker `yuezao-edge` | `yuezao.org` 官网静态直出、`web.yuezao.org` 网页端外壳直出、`www` 301、明文 HTTP 一律 301 |
+| 国内上游 | WorkBuddy Sites 上的 `server.py`（出口 IP 境内） | 只接 `web.yuezao.org/api/*`：登录、业务、版本检查；无状态，票据在用户浏览器 cookie |
+| 目标系统 | 完美校园 | 只与国内上游直接对话 |
+
+- **红线**：与完美校园直接对话的那一层不能搬进 Cloudflare，否则出站变成境外 PoP，登录 IP 会被判异常。「以后把所有网页迁到 Workers / GitHub Pages」只落实了静态部分，业务层留在国内是设计，不是遗留。
+- **分享码**：公开域名全链路不需要；只有直连上游才要，且由 Worker 的 `proxy()` 自动补。APK 的更新链路也已切到 `yuezao.org` 裸链。
+- **部署**：官网静态与网页端外壳 → `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`；上游 Python 服务 → `web-app/README.md`。
+- **隐私政策**：`site/policy.json` 是唯一源，`python tools/gen_policy.py` 一次生成官网页面、应用内置文本与 `DISC_VER`，构建与部署前都有指纹校验（见第 16 章）。
+
+---
+
 ## 目录
 
 > 全文 1700+ 行，按时间顺序写成，**不必通读**。想借鉴某一部分做法，按下面的速查表挑 2–3 节即可；
@@ -26,10 +43,12 @@
 | 方法论与踩坑：把结果当请求、无效测量 | [10 踩坑清单](#10-踩坑清单) · [11 时钟误差研究](#11-时钟误差研究过程) · [12.2 一次误判](#122-流体云始终不出现一次把结果当请求的误判11310) |
 | 发版、版本管理与「发完才想起」 | [8.4 检查更新](#84-103检查更新) · [12.28 版本合并](#1228-中间版本合并为-115对外叙事收敛) · [12.29 披露缺口](#1229-隐私政策升-v3补上官网这个通信方115-发完之后发现) |
 | 官网、云服务、反馈表单怎么搭 | [14 官网](#14-官网site) · [15 云服务](#15-云服务官网问题反馈114-之后) |
+| 当前线上架构是哪三层、哪些旧描述已过时 | **[架构现状](#架构现状2026-11-14-起)**（先读这个） |
 | 最近一次改动（赞赏码 / 许可 / 贡献约定） | [12.30](#1230-官网赞赏码许可放宽与贡献约定115-发完之后暂不发版) · [LICENSE](../LICENSE) · [CONTRIBUTING.md](../CONTRIBUTING.md) |
 
 **章节**
 
+- **[架构现状（2026-11-14 起）](#架构现状2026-11-14-起)** — 先读这个：三域名分流、边缘直出、国内上游与红线
 - [0. 起因：一个非常具体的痛点](#0-起因一个非常具体的痛点) — 为什么做这个工具：开屏广告与多层菜单的实测
 - [1. 第一回合：先判断「目标代码在哪一层」](#1-第一回合先判断目标代码在哪一层) — 先判断目标代码在哪一层，再决定怎么动手
 - [2. 转折点：官方前端静态资源](#2-转折点官方前端静态资源) — 转折点：业务其实是独立的 H5 单页应用
@@ -801,6 +820,8 @@ wanmei-bath-web/       server.py / vwater.py / wxlogin.py / login.py / web/ + co
 ---
 
 ## 12. 现状与产物
+
+> 本章及 14 / 15 章按版本记录历史。域名、分享码与部署方式的**现状**见开头「架构现状（2026-11-14 起）」，别把下面的当时做法当成现行配置。
 
 | 版本 | APK | 大小 | versionCode |
 | --- | --- | --- | --- |
@@ -1637,7 +1658,7 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 **一个不得不接受的耦合**：官网用分享码控制访问，反馈页地址必须带 `?sharecode=`，否则 403。所以 `FEEDBACK_URL` 是整条带码的地址，写死在 `assets/index.html` 里。站点换域名或换分享码时，这里和 README 都要跟着改——写在注释里了。
 
-> **2026-11-14 更新，上面的耦合已解除**：官网域名换成 `yuezao.org` 并由 Cloudflare 边缘直出，不再校验分享码（码只在上游 `zhishui-site` 直连时需要）。对外链接一律去码；`assets/index.html` 的 `SITE_URL` / `FEEDBACK_URL` 改为基址拼装。`Update.java` 的 `latest.json` 仍带码走旧域名，1.2.0 发版时统一切到新基址（届时可不带码）。本节以上历史叙述按当时情况保留，不回改。
+> **2026-11-14 更新，上面的耦合已解除**：官网域名换成 `yuezao.org` 并由 Cloudflare 边缘直出，不再校验分享码（码只在上游 `zhishui-site` 直连时需要）。对外链接一律去码；`assets/index.html` 的 `SITE_URL` / `FEEDBACK_URL` 改为基址拼装。同日后续提交里，`Update.java` 的清单源与三份 `latest.json` 的官网镜像也已切到 `yuezao.org` 裸链，并补回了「官网直下」下载地址。本节以上历史叙述按当时情况保留，不回改；现状见开头「架构现状」。
 
 **版本 1.1.4.5 / versionCode 55**。编号按用户要求用了四段：功能版三段、补丁版四段，`1.1.4.5` 一眼能看出是 `1.1.4` 之后的小修，比直接跳到 `1.1.5` 更贴合实际改动量。两端版本比较都支持任意段数（不足补 0），实测 `1.1.4.5 > 1.1.4`。
 
@@ -1772,6 +1793,8 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 **待决（本轮不执行）**：作者提出「使用环境基本在国内，是否干脆不走 GitHub 及相关 CDN、只保留官网下载」。顾虑点：官网不带 `?sharecode=` 的路径一律 403，而 App 的更新检查是裸 GET、不带 cookie，目前靠把分享码拼进公开 `latest.json` 才能走官网；若砍成单源，分享码一旦失效，下载与版本清单会同时断，已装旧版本也无法自我修复。GitHub Release 还承担 SHA 校验基准与历史版本归档。本轮先把想法记下来，不动 `Update.java`、不动三份 `latest.json`。
 
+> **2026-11-14 后续**：这条顾虑的前提已消失——官网换到 `yuezao.org` 后全链路不校验分享码，裸链即可（实测 `latest.json`、`policy.json`、APK 均 200）。「只保留官网下载」当时未执行，但「官网主下载 + GitHub 冷备 + jsDelivr 末尾兜底」后来已落实；`Update.java` 会无条件把官网直链补进下载地址列表。以上文字按当时情况保留。
+
 ## 13. 小结
 
 从「想分析客户端」到「发现业务在 H5」，从「必须依赖额外权限与官方客户端」到「手机号 + 验证码纯登录」，从「一个能跑的网页」到「一份可覆盖安装、可审计、可回滚的 APK」——整个过程真正起作用的不是某个技巧，而是几次及时的**边界判断**：
@@ -1789,26 +1812,34 @@ background: linear-gradient(var(--card),var(--card)) padding-box,
 
 1.1.3.42 起在仓库里带了一个静态官网，目录 `site/`，纯 HTML/CSS/JS，无构建步骤。
 
-**为什么是静态站 + 相对路径**：静态站可以零成本搬来搬去；全站不写死域名，部署到 GitHub Pages、任意静态托管（含 WorkBuddy 发布）都不用改代码。首页里的版本号、体积、下载地址统一从 `site/site-config.js` 读，发版只改这一个文件。
+**为什么是静态站 + 相对路径**（1.1.3.42 当时的判断）：静态站可以零成本搬来搬去；全站不写死域名，部署到 GitHub Pages、任意静态托管（含 WorkBuddy 发布）都不用改代码。首页里的版本号、体积、下载地址统一从 `site/site-config.js` 读，发版只改这一个文件。
+
+> **2026-11-14 现状**：官网已固定由 Cloudflare Worker 在 `yuezao.org` 直出，网页端入口也改成绝对裸链 `https://web.yuezao.org`——跨子域的链接必须写全，「不写死域名」不再是硬要求。`site-config.js` 仍管版本 / 体积 / 仓库地址，但**政策版本已移出**，唯一源是 `site/policy.json`。
 
 **文件**：
 
 | 文件 | 作用 |
 | --- | --- |
 | `index.html` | 首页：介绍、功能、下载与安装、锁屏风险提示、常见问题 |
-| `privacy.html` | 隐私政策（16 节，第 9 节带 `#s9` 锚点供首页与 App 内引用，第 16 节为官网反馈表单） |
+| `privacy.html` | 隐私政策（16 节，第 9 节带 `#s9` 锚点供首页与 App 内引用，第 16 节为官网反馈表单）；**正文区由 `tools/gen_policy.py` 生成，勿手改** |
 | `changelog.html` | 更新日志，按时间倒序 |
 | `style.css` | 全站样式，深浅两套主题 |
-| `site-config.js` | 版本 / 体积 / 政策版本 / 仓库地址，唯一需要维护的配置 |
+| `site-config.js` | 版本 / 体积 / 仓库地址；**政策版本不在这里**，唯一源是 `site/policy.json` |
+| `policy.json` | 隐私政策正文与版本号的唯一源：应用热更新拉它，官网页面与应用内置文本都从它生成 |
 
-**政策版本要与 App 对齐**：`site-config.js` 里的 `policyVersion` 必须和 App 内 `DISC_VER` 一致。改条文时两边一起 +1，否则「官网说 v2、App 还停在 v1」会自相矛盾。（12.29 修正：**条文内容**两边一致即可，App 侧版本号允许滞后一个发布周期——条文在官网立即生效，在 App 内随下个版本生效。）
+**政策版本不再手工对齐**：`site-config.js` 里的 `policyVersion` / `policyDate` 已删除。`site/policy.json` 是唯一源，`python tools/gen_policy.py` 一次生成官网 `privacy.html`、应用内 `policyTpl` 与 `DISC_VER`；每份生成物带正文指纹，`tools/build.sh` 与 `web-app/cloudflare/build-assets.mjs` 都会在构建/部署前校验，漏跑直接拦下。详见第 16 章。（12.29 那套「两边各自递增、App 允许滞后一个发布周期」的做法已作废。）
 
-**部署**（两条路，任选）：
+**部署（现行做法）**：官网文件仍以本仓库 `site/` 为唯一维护点，但**线上不再走 GitHub Pages / WorkBuddy 发布**，而是交给 `web-app` 仓库的 Cloudflare Worker：
 
-- GitHub Pages：仓库 Settings → Pages → Source 选 `main` + `/docs` 或 `/ (root)` 都不含 `site/`，**所以要么用 Actions 把 `site/` 作为产物上传**，要么把 `site/` 内容复制到 Pages 指定的目录。简单起见也可以在 Settings 里改用 Actions 模板「Static HTML」，把 `path` 指到 `site`。
-- 其他静态托管（含 WorkBuddy 发布）：直接把 `site/` 目录作为根目录上传即可。
+```bash
+cd ../web-app/cloudflare
+node build-assets.mjs     # 复制 site/ 快照、生成 web-shell.html 与 _headers、校验政策一致性
+npx wrangler deploy
+```
 
-**未完成**：站内下载按钮指向 `releases/download/v<版本>/<apk>`，在对应 Release 建好之前会 404——页面上已写明「404 就去全部版本下载正式版」。发布 1.1.3.42 时记得把 `testbuild/zhishui-1.1.3.42.apk` 传到该 Release，否则官网的「下载 APK」是空的。
+`cloudflare/public/` 是构建产物，不入库；`wrangler.jsonc` 的 `html_handling: "none"` 必须保留（否则 `/privacy.html` 会被 307）。上游 Python 服务仍需一份 `site/` 快照供本地/容器使用，见 `web-app/README.md`。早期的 GitHub Pages / 静态托管两条路已不作为现行部署路径。
+
+**下载按钮**：现已改为本站直下优先（`site-config.js` 的 `localPath`），GitHub Release 作为备用，不再依赖「对应 Release 必须先建好」。1.1.3.42 时期那条「未完成」已结清。
 
 ## 15. 云服务：官网问题反馈（1.1.4 之后）
 
@@ -1879,6 +1910,8 @@ CREATE POLICY feedback_insert_public ON feedback FOR INSERT TO authenticated, an
 ### 15.5 一个必须记住的部署行为
 
 **部署是覆盖式上传，不会删除服务器上已有的文件。** 本地 `rm cloudcheck.html` 之后重新发布，那个页面仍然在线——而它打开就会往库里插一条。正确做法是**把要下线的页面覆盖成占位页**（`noindex` + 跳首页 + 一句「已移除」），而不是删掉。这次就是踩了这个坑才发现：删完再发布，`/cloudcheck.html` 还是 200。
+
+> **2026-11-14 注**：这是 WorkBuddy Sites（覆盖式上传）时代的行为。官网静态改由 Cloudflare Workers 静态资源直出后，`build-assets.mjs` 会重建整个 `public/`，部署是整包替换，本地删掉的文件随新版本一起消失，不再需要占位页。记录保留是因为 1.1.x 时期确实踩过。
 
 ### 15.6 隐私政策第 16 节与版本号
 

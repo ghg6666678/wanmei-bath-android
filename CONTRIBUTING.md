@@ -27,6 +27,8 @@
 
 改完直接重新构建即可。官网那套样式在 `site/style.css`，是独立维护的，两边颜色不联动。
 
+官网文件（`site/`）线上由 Cloudflare Worker 静态直出：改完要跑 `cd ../web-app/cloudflare && node build-assets.mjs && npx wrangler deploy` 才会上线。改隐私政策条文只动 `site/policy.json`，再跑 `python tools/gen_policy.py` 生成官网页面、应用内置文本与 `DISC_VER`；手改生成物会被构建前的指纹校验拦下。
+
 ## 提交前自查
 
 - [ ] 没有引入付费门槛、广告、打赏诱导或统计 SDK
