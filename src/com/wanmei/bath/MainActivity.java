@@ -1,5 +1,6 @@
 package com.wanmei.bath;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -390,16 +391,69 @@ public class MainActivity extends android.app.Activity {
             }).start();
         }
 
+        /**
+         * 诊断信息：给「设置 → 应用 → 诊断信息」收集材料用。
+         *
+         * <p>为什么需要它：界面上看到的永远是翻译过的一句话（「网络不太稳定」），
+         * 真正的异常原文被挡在了后面。用户报「用不了」时，光凭那句话谁也没法判断
+         * 到底是断网、校园网认证页截了响应，还是我们自己的 bug——把原文留在本机、
+         * 由用户主动复制出来，才是既不上屏又能排查的做法。
+         *
+         * <p>纯本地读取：不联网、不落盘、不含手机号与姓名，只回答「有没有登录态」。
+         */
         @JavascriptInterface
         public String deviceInfo() {
+            JSONObject o = new JSONObject();
             try {
-                JSONObject o = new JSONObject();
+                JSONObject v = appVersionObj();
+                o.put("appVersion", v.optString("version", ""));
+                o.put("versionCode", v.optInt("versionCode", 0));
+                o.put("brand", Build.MANUFACTURER);
                 o.put("model", Build.MODEL);
+                o.put("device", Build.DEVICE);
+                o.put("release", Build.VERSION.RELEASE);
                 o.put("sdk", Build.VERSION.SDK_INT);
+                o.put("abi", Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0
+                        ? Build.SUPPORTED_ABIS[0] : "");
                 o.put("hasToken", api.hasToken());
-                return o.toString();
-            } catch (Exception e) {
-                return "{}";
+                o.put("now", System.currentTimeMillis());
+                java.util.TimeZone tz = java.util.TimeZone.getDefault();
+                o.put("tz", tz.getID());
+                o.put("tzOffsetMin", tz.getOffset(System.currentTimeMillis()) / 60000);
+                o.put("locale", java.util.Locale.getDefault().toString());
+                o.put("net", netDiag());
+            } catch (Exception ignored) { }
+            return o.toString();
+        }
+
+        /**
+         * 一句话描述当前网络。
+         *
+         * <p>关键在于区分「连上了」和「连上了但出不去」：校园网要认证、Wi-Fi 有信号没上行，
+         * 这两种情况下 {@code NET_CAPABILITY_INTERNET} 可能为真而 {@code VALIDATED} 为假。
+         * 用户说「我明明有网」时，这一行就是判断依据。
+         */
+        private String netDiag() {
+            try {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                        getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cm == null) return "读不到网络状态";
+                android.net.Network n = cm.getActiveNetwork();
+                if (n == null) return "无网络";
+                android.net.NetworkCapabilities c = cm.getNetworkCapabilities(n);
+                if (c == null) return "类型未知";
+                StringBuilder sb = new StringBuilder();
+                if (c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) sb.append("Wi-Fi");
+                else if (c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) sb.append("移动数据");
+                else if (c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)) sb.append("有线");
+                else if (c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) sb.append("VPN");
+                else sb.append("其他");
+                sb.append(c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        ? " · 已验证可上网" : " · 未验证（连上了但可能出不去）");
+                if (c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) sb.append(" · 走 VPN");
+                return sb.toString();
+            } catch (Throwable t) {
+                return "读取失败（" + t.getClass().getSimpleName() + "）";
             }
         }
 

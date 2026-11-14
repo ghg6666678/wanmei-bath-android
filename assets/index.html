@@ -378,7 +378,12 @@ input[type=tel]::placeholder{color:var(--ink3)}
 .updalt code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--ink2);
   background:rgba(16,24,40,.05);padding:2px 5px;border-radius:5px;word-break:break-all}
 .updlink{cursor:pointer;text-decoration:none;color:var(--brand)}
+.diagbox{max-height:46vh;overflow-y:auto;overflow-x:hidden;background:rgba(16,24,40,.045);
+  border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:4px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.65;
+  color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
 @media (prefers-color-scheme:dark){
+  .diagbox{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.13)}
   .updstate.ok{background:rgba(18,183,106,.15);border-color:rgba(18,183,106,.45);color:#5fd6a4}
   .updstate.bad{background:rgba(247,144,9,.16);border-color:rgba(253,176,34,.5);color:#fdb022}
   .updstate .spin{border-color:rgba(79,141,255,.3);border-top-color:var(--brand)}
@@ -538,6 +543,13 @@ input[type=tel]::placeholder{color:var(--ink3)}
         <div class="grow">
           <div class="name">问题反馈</div>
           <div class="info">不用 GitHub 账号，直接留言给作者</div>
+        </div>
+        <div class="val"><i>›</i></div>
+      </div>
+      <div class="setrow" id="rowDiag">
+        <div class="grow">
+          <div class="name">诊断信息</div>
+          <div class="info">出问题时复制给作者，帮他定位（不联网、不上传）</div>
         </div>
         <div class="val"><i>›</i></div>
       </div>
@@ -859,6 +871,16 @@ input[type=tel]::placeholder{color:var(--ink3)}
     <button class="btn" style="flex:1.4" id="updRetry">重新检测</button>
   </div>
 </div>
+<div class="sheet" id="diagSheet">
+  <div class="bar-h"></div>
+  <h3>诊断信息</h3>
+  <div class="hint">这些内容只在本机生成，不联网、不上传，也不含手机号和姓名。出问题时点「复制」，粘到反馈里——界面上只说「网络未连接」，这里才有原始原因。</div>
+  <div class="diagbox" id="diagBody"></div>
+  <div style="display:flex;gap:9px;margin-top:12px">
+    <button class="btn ghost" style="flex:1" id="diagClose">关闭</button>
+    <button class="btn" style="flex:1.4" id="diagCopy">复制</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -874,6 +896,33 @@ function toast(msg, err) {
   t._t = setTimeout(() => t.className = 'toast', 2600);
 }
 
+/* ---------- 诊断日志（1.2.0） ----------
+   界面上只说人话，原始信息留在这里。用户看不懂 Exception，但要排查问题时，被藏起来的
+   那句原文才是关键：SocketException 是断网、`Value <!DOCTYPE` 是校园网认证页把响应换成了
+   HTML、NullPointerException 才是我们自己的 bug——这三种在屏幕上长得一模一样。
+   环形缓冲，只在内存里，不落盘、不联网；用户在「设置 → 应用 → 诊断信息」里点复制才离开本机。 */
+const DIAG_MAX = 60;
+const __diag = [];
+function diagAdd(kind, where, raw, shown) {
+  try {
+    __diag.push({
+      t: Date.now(), kind: kind || '', where: where || '',
+      raw: String(raw == null ? '' : raw).slice(0, 500),
+      shown: String(shown == null ? '' : shown)
+    });
+    if (__diag.length > DIAG_MAX) __diag.splice(0, __diag.length - DIAG_MAX);
+  } catch (e) { }
+}
+/* 脚本本身抛错、以及没人 catch 的 Promise —— 这两类恰恰最像「程序 bug」，必须留证据 */
+window.addEventListener('error', e => {
+  diagAdd('js', 'onerror', (e && e.message ? e.message : '') +
+    ' @' + String((e && e.filename) || '').split('/').pop() + ':' + ((e && e.lineno) || 0), '');
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e && e.reason;
+  diagAdd('js', 'unhandledrejection', (r && (r.stack || r.message)) || String(r || ''), '');
+});
+
 /* 断网/连不上时统一说法。
    原生抛上来的是「java.net.UnknownHostException: Unable to resolve host …」，
    浏览器是「Failed to fetch」，对用户都没有任何意义——他要的只有「怎么了」和「怎么办」。
@@ -884,18 +933,17 @@ function toast(msg, err) {
    ① 原生已经翻译过的三句话别再改（否则「网络未连接」会被下面的技术兜底吃掉）；
    ② 认明确的网络关键词（含 UNKNOWN_HOST 之外的 SocketException/ECONNRESET 等）；
    ③ 兜底：像异常类名 / 技术细节的，一律换成一句人话。 */
-function netText(msg) {
+function netText(msg, where) {
   const s = String(msg == null ? '' : msg).trim();
   if (!s) return s;
-  if (/网络未连接|网络连接超时|网络不太稳定|登录已失效|还没有登录/.test(s)) return s;
-  if (/UnknownHost|Unable to resolve host|No address associated|ConnectException|NoRouteToHost|PortUnreachable|Network is unreachable|ENETUNREACH|ECONNREFUSED|ECONNRESET|Connection reset|Broken pipe|Failed to fetch|NetworkError|Load failed|ERR_INTERNET|ERR_NAME_NOT_RESOLVED|ERR_NETWORK_CHANGED|ERR_CONNECTION/i.test(s)) {
-    return '网络未连接';
-  }
-  if (/SocketTimeout|Read timed out|connect timed out|timed out|ETIMEDOUT|ERR_TIMED_OUT/i.test(s)) {
-    return '网络连接超时，请重试';
-  }
-  if (technicalText(s)) return '网络不太稳定，请稍后重试';
-  return s;
+  let out = s;
+  if (/网络未连接|网络连接超时|网络不太稳定|登录已失效|还没有登录/.test(s)) out = s;
+  else if (/UnknownHost|Unable to resolve host|No address associated|ConnectException|NoRouteToHost|PortUnreachable|Network is unreachable|ENETUNREACH|ECONNREFUSED|ECONNRESET|Connection reset|Broken pipe|Failed to fetch|NetworkError|Load failed|ERR_INTERNET|ERR_NAME_NOT_RESOLVED|ERR_NETWORK_CHANGED|ERR_CONNECTION/i.test(s)) out = '网络未连接';
+  else if (/SocketTimeout|Read timed out|connect timed out|timed out|ETIMEDOUT|ERR_TIMED_OUT/i.test(s)) out = '网络连接超时，请重试';
+  else if (technicalText(s)) out = '网络不太稳定，请稍后重试';
+  /* 改写过 = 原文对用户没意义，但对排查有价值：进诊断日志，不上屏。 */
+  if (out !== s) diagAdd('net', where, s, out);
+  return out;
 }
 
 /* 文本像不像「异常类名 + 技术细节」。像，就不许直接展示给用户。
@@ -929,7 +977,7 @@ window.__apiDone = function (id, json) {
   try { j = JSON.parse(json); } catch (e) { return p.reject(new Error('网络不太稳定，请稍后重试')); }
   /* 原生侧的失败原因统一过一遍 netText：断网/超时换成「网络未连接」，
      业务错误原样透出。所有走原生桥的调用都经过这里，所以改一处就够。 */
-  if (!j.ok && j.error) return p.reject(new Error(netText(j.error)));
+  if (!j.ok && j.error) return p.reject(new Error(netText(j.error, 'api ' + (p.path || ''))));
   p.resolve(j);
 };
 
@@ -966,12 +1014,12 @@ function api(path, opt) {
       .catch(e => {
         const m = (e && e.message) || '';
         if (/网络未连接|网络连接超时|网络不太稳定/.test(m)) throw e;
-        throw new Error(netText(m) || '网络未连接');
+        throw new Error(netText(m, 'fetch ' + method + ' ' + path) || '网络未连接');
       });
   }
   return new Promise((resolve, reject) => {
     const id = 'r' + (++__seq);
-    __pending[id] = {resolve, reject};
+    __pending[id] = {resolve, reject, path: method + ' ' + path};
     try { nat.apiAsync(id, path, method, body); }
     catch (e) { delete __pending[id]; reject(new Error('调用原生失败')); }
   });
@@ -2063,7 +2111,7 @@ async function loadAll() {
     scheduleRecPrefetch();          /* 会话已热，顺手把记录页的当前月拉下来 */
   } catch (e) {
     /* 断网不该说成「加载失败」：那不是失败，只是还没连上。 */
-    const msg = netText(String(e.message || e));
+    const msg = netText(String(e.message || e), 'loadAll');
     if (/登录|token|票据/i.test(msg)) {
       const logged = (state.cfg || {}).hasToken;
       /* 未登录时 /api/state 拿不到 config，这里单独拉一次 /api/config：
@@ -3144,6 +3192,70 @@ function copyText(t) {
   } else toast('复制失败，请长按选择', true);
 }
 
+/* ---------- 诊断信息页 ----------
+   界面上只说人话，这一页把「被藏起来的东西」摊开：设备/系统、网络能力、登录态（只报有无）、
+   以及最近 60 条被改写的原始报错。用户报「用不了」时，这三类信息足以区分
+   「断网」「连上了但出不去（认证页）」「程序自己的 bug」。 */
+function diagClock(ms) {
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+function diagStamp(ms) {
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + diagClock(ms);
+}
+function diagZone() {
+  const off = -new Date().getTimezoneOffset();
+  const abs = Math.abs(off);
+  return 'UTC' + (off >= 0 ? '+' : '-') + Math.floor(abs / 60) + ':' + String(abs % 60).padStart(2, '0');
+}
+function diagLines() {
+  const nat = __native();
+  let d = {};
+  if (nat && nat.deviceInfo) {
+    try { d = JSON.parse(String(nat.deviceInfo() || '{}')); } catch (e) { }
+  }
+  const L = [];
+  L.push('【约澡 诊断信息】');
+  L.push('生成时间   ' + diagStamp(Date.now()) + '（' + diagZone() + '）');
+  L.push('应用版本   ' + (d.appVersion || state.appVersion || APP_VERSION) +
+         '（构建号 ' + (d.versionCode || '—') + '）');
+  L.push('设备       ' + [d.brand, d.model].filter(Boolean).join(' ') +
+         ' · Android ' + (d.release || '?') + '（API ' + (d.sdk || '?') + '）' +
+         (d.abi ? ' · ' + d.abi : ''));
+  L.push('网络       ' + (d.net || '—'));
+  L.push('登录态     ' + ((state.cfg || {}).hasToken || d.hasToken ? '已登录' : '未登录') +
+         '（这里不记录手机号与姓名）');
+  L.push('服务器时间 ' + (state.serverCalibrated
+      ? '已校准 ' + (state.serverOffset >= 0 ? '+' : '') + (state.serverOffset / 1000).toFixed(1) + ' 秒'
+      : '未知，按本机时间估算'));
+  if (state.update) {
+    const u = state.update;
+    L.push('上次检查更新 ' + (u.source || '—') + ' · ' + (u.ok ? '成功' : '失败') +
+           (u.stale ? '（降级使用旧记录）' : ''));
+  }
+  L.push('已记录事件 ' + __diag.length + ' 条（上限 ' + DIAG_MAX + '，只在本机内存里）');
+  L.push('');
+  L.push('—— 最近事件（新的在上）——');
+  if (!__diag.length) L.push('无');
+  __diag.slice().reverse().forEach(e => {
+    let line = diagClock(e.t) + ' [' + e.kind + ']' + (e.where ? ' ' + e.where : '') + '：' +
+               String(e.raw).replace(/\s+/g, ' ');
+    if (e.shown) line += '   → ' + e.shown;
+    L.push(line.length > 300 ? line.slice(0, 297) + '…' : line);
+  });
+  return L;
+}
+
+let __diagText = '';
+function renderDiag() {
+  const L = diagLines();
+  __diagText = L.join('\n');
+  const box = $('#diagBody');
+  box.textContent = __diagText;
+  box.scrollTop = 0;
+}
+
 /* 取版本信息：安卓走原生（原生内部已做多通道 + 内置清单兜底）；网页先问服务端，再退到本地清单 */
 async function fetchUpdateInfo() {
   const nat = __native();
@@ -3185,6 +3297,9 @@ async function runUpdateCheck() {
   try {
     const res = await fetchUpdateInfo();
     state.update = res;
+    /* 通道探测结果 = 「为什么没发现新版本」的第一手材料 */
+    diagAdd('update', res.source || '', (res.tried || []).join(' · '),
+      res.ok ? (res.stale ? '降级使用：' + (res.error || '') : '正常') : (res.error || '失败'));
     renderUpdate(res);
     renderMe();
   } catch (e) {
@@ -3551,6 +3666,10 @@ function renderUpdate(res) {
 $('#rowUpdate').onclick = () => { showSheet('#updSheet'); runUpdateCheck(); };
 $('#rowSite').onclick = () => openExternal(SITE_URL);
 $('#rowFeedback').onclick = () => openExternal(FEEDBACK_URL);
+$('#rowDiag').onclick = () => { showSheet('#diagSheet'); renderDiag(); };
+$('#diagClose').onclick = () => hideSheet();
+/* 每次打开都重新收集：复现完再打开一次，就是最新的现场 */
+$('#diagCopy').onclick = () => { if (!__diagText) renderDiag(); copyText(__diagText); };
 $('#updClose').onclick = () => hideSheet();
 $('#updRetry').onclick = () => runUpdateCheck();
 
