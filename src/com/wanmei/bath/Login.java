@@ -32,7 +32,13 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class Login {
 
-    static final String UA = "Dalvik/2.1.0 (Linux; U; Android 5.1.1; HUAWEI MLA-AL10 Build/HUAWEIMLA-AL10)";
+    /* 登录走的是官方 App 的原生接口，UA 用 Dalvik 格式——这正是安卓 http.agent
+     * 的原生样式，官方 App 发登录请求时就是它。但值必须跟请求体里的
+     * shebeixinghao / telephoneModel 描述同一台设备（真实机型 + 真实系统版本 +
+     * 真实构建号），不能再沿用开源实现里那台 2020 年的华为。早期改造只改了
+     * 请求体字段，这个 UA 头一直漏着没动。 */
+    static final String UA = "Dalvik/2.1.0 (Linux; U; Android " + Api.androidVer()
+            + "; " + Api.deviceModel() + " Build/" + Api.buildId() + ")";
     static final String[] HOSTS = {"https://app.17wanxiao.com:443", "https://server.17wanxiao.com"};
     static final byte[] IV = {'6', '6', '6', '6', '6', '6', '6', '6'};
     static final int WX_VERSION = 10552101;
@@ -42,11 +48,22 @@ public class Login {
     }
 
     public String host = HOSTS[0];
+    /* deviceId：真实 App 首装生成一次、之后从不变化（换新值 = 换了台手机）。
+     * 网页端存在浏览器里（加密票据 + localStorage），安卓端存私有
+     * SharedPreferences——两端语义一致：登录多少次都是同一台设备。 */
     public String deviceId = UUID.randomUUID().toString();
     public String sessionId = "";
     public String appKey = "";
 
     private KeyPair keyPair;
+
+    public Login() { }
+
+    /** 用持久化的 deviceId 构造（MainActivity.persistedDeviceId 传入）；
+     *  空值时退回随机生成，老的调用方式不受影响。 */
+    public Login(String deviceId) {
+        if (deviceId != null && !deviceId.trim().isEmpty()) this.deviceId = deviceId.trim();
+    }
 
     // ---------------- 加密原语 ----------------
 

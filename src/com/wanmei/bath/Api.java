@@ -66,6 +66,18 @@ public class Api {
         return v.isEmpty() ? "14" : v;
     }
 
+    /** 真实构建号（Build.ID），同样只保留 ASCII，供登录 UA 头的 Build/ 槽位使用。 */
+    static String buildId() {
+        String id = Build.ID == null ? "" : Build.ID.trim();
+        StringBuilder sb = new StringBuilder(id.length());
+        for (int i = 0; i < id.length(); i++) {
+            char c = id.charAt(i);
+            if (c >= 0x20 && c <= 0x7E) sb.append(c == ' ' ? '_' : c);
+        }
+        String out = sb.toString();
+        return out.isEmpty() ? "build" : out;
+    }
+
     private String token = "";
     private String outid = "";
     private String customerid = "";

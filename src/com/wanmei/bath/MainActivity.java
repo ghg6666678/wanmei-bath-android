@@ -463,6 +463,14 @@ public class MainActivity extends android.app.Activity {
                 o.put("sdk", Build.VERSION.SDK_INT);
                 o.put("abi", Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0
                         ? Build.SUPPORTED_ABIS[0] : "");
+                /* 登录握手与业务请求各自对外使用的 User-Agent 原文。两者都是类加载时
+                 * 拼好的常量、请求头直接引用它，所以诊断页显示的值就是发出去的值——
+                 * 用户不抓包也能核对「UA 是否已从开源实现那台华为换成本机真实机型」。 */
+                o.put("loginUA", Login.UA);
+                o.put("apiUA", Api.UA);
+                /* 登录设备 ID：跨登录稳定（重登还是同一台）。诊断页只显示前 8 位——
+                 * 它是随机 UUID 不是硬件标识，但全量展示没必要。 */
+                o.put("devId", persistedDeviceId());
                 o.put("hasToken", api.hasToken());
                 o.put("now", System.currentTimeMillis());
                 java.util.TimeZone tz = java.util.TimeZone.getDefault();
@@ -1248,11 +1256,24 @@ public class MainActivity extends android.app.Activity {
 
     private synchronized Login getLogin() throws Exception {
         if (login == null || login.sessionId == null || login.sessionId.isEmpty()) {
-            Login l = new Login();
+            Login l = new Login(persistedDeviceId());
             l.exchangeKey();
             login = l;
         }
         return login;
+    }
+
+    /** 登录用的设备 ID：首装生成一次存私有 SharedPreferences，之后每次登录都是
+     *  同一「台设备」。真实 App 的 deviceId 从不随登录变化；此前每轮登录随机换新，
+     *  在官方那边等于频繁换手机。退出登录只清票据（Store），不动这个值。 */
+    private String persistedDeviceId() {
+        android.content.SharedPreferences sp = getSharedPreferences("bath", MODE_PRIVATE);
+        String id = sp.getString("deviceId", "");
+        if (id == null || id.trim().isEmpty()) {
+            id = java.util.UUID.randomUUID().toString();
+            sp.edit().putString("deviceId", id).apply();
+        }
+        return id;
     }
 
     // ================= 接口分发 =================

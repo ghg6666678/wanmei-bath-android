@@ -3294,6 +3294,11 @@ function diagLines() {
   L.push('设备       ' + [d.brand, d.model].filter(Boolean).join(' ') +
          ' · Android ' + (d.release || '?') + '（API ' + (d.sdk || '?') + '）' +
          (d.abi ? ' · ' + d.abi : ''));
+  /* UA 是原生类加载时拼好的常量，请求头直接引用，这里显示的就是实际发送值。 */
+  if (d.loginUA) L.push('登录 UA    ' + d.loginUA);
+  if (d.apiUA) L.push('业务 UA    ' + d.apiUA);
+  /* 设备 ID 跨登录稳定：退出重登后前 8 位不变 = 还是「同一台设备」。 */
+  if (d.devId) L.push('设备 ID    ' + String(d.devId).slice(0, 8) + '…（登录用，跨登录不变）');
   L.push('网络       ' + (d.net || '—'));
   L.push('登录态     ' + ((state.cfg || {}).hasToken || d.hasToken ? '已登录' : '未登录') +
          '（这里不记录手机号与姓名）');
