@@ -174,6 +174,7 @@
     if (code === 'content_too_short') return '内容再具体一点：至少 10 个字，才够判断问题出在哪。';
     if (code === 'content_too_long') return '内容超过 2000 字，请精简后再提交。';
     if (code === 'too_large') return '提交的内容太大了，请精简后再试。';
+    if (code === 'rate_limited') return '提交太频繁了，请过一分钟再发一条。';
     return '';
   }
 
