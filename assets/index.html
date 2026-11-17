@@ -2066,14 +2066,38 @@ function renderMe() {
    顶栏文案统一走 syncHeader()，背景刷新（loadAll）也不会把「设置」标题刷掉。 */
 let __setOpen = false;
 
+/* 账号身份字段：退出登录 / 登录态失效时，这些必须从内存里彻底删掉。
+   只清 name/outid/school 是不够的——phone / mobile / customerCode / needCard
+   同样属于「上一个账号的信息」。残留的话，syncHeader() 一被调用（进出设置页
+   就会调）就把掩码手机号重新挂回顶栏，看起来像没退干净。
+   不在这里面的字段（如设备画像、公开配置）可以继承。 */
+const IDENTITY_KEYS = ['name', 'phone', 'mobile', 'outid', 'school',
+                       'customerCode', 'customerid', 'token', 'session',
+                       'needCard', 'uaModel'];
+
+function clearIdentity(cfg) {
+  const c = Object.assign({}, cfg || {});
+  IDENTITY_KEYS.forEach(k => { delete c[k]; });
+  c.hasToken = false;
+  return c;
+}
+
 function syncHeader() {
   if (__setOpen) { $('#hName').textContent = '设置'; $('#hSub').textContent = ''; return; }
-  const n = (state.cfg || {}).name;
+  const c = state.cfg || {};
+  /* 未登录时顶栏只显示问候语，一个账号字段都不碰。这是一道兜底防线：
+     即使某条路径漏清了 state.cfg，也不会把上一个账号的姓名或掩码手机号
+     重新挂到屏幕上。 */
+  if (!c.hasToken) {
+    $('#hName').textContent = greeting();
+    $('#hSub').textContent = '';
+    return;
+  }
   /* 顶部格式：服务器下发的姓名 + 问候语，如「张三，晚上好」 */
-  $('#hName').textContent = n ? (n + '，' + greeting()) : greeting();
+  $('#hName').textContent = c.name ? (c.name + '，' + greeting()) : greeting();
   /* 副标题：掩码手机号优先；没有就退回学校名，避免空着一行 */
-  const ph = maskPhone((state.cfg || {}).phone);
-  $('#hSub').textContent = ph || (state.cfg || {}).school || '';
+  const ph = maskPhone(c.phone);
+  $('#hSub').textContent = ph || c.school || '';
 }
 
 function openSettings() {
@@ -2170,10 +2194,15 @@ async function loadAll() {
       const logged = (state.cfg || {}).hasToken;
       /* 未登录时 /api/state 拿不到 config，这里单独拉一次 /api/config：
          它不要求登录，能拿到「这个号还没绑校园卡」这个判断。 */
+      let cfg2 = {};
       try {
         const cj = await api('/api/config');
-        state.cfg = cj.config || state.cfg;
+        cfg2 = cj.config || {};
       } catch (e2) { }
+      /* 配置可以继承，身份必须清空：/api/config 拉取失败（断网）时，
+         旧 cfg 里还带着刚才那个人的姓名/学号/掩码手机号，留在内存里的话，
+         下次 renderMe() 或 syncHeader() 又会原样冒出来。 */
+      state.cfg = clearIdentity(cfg2);
       $('#roomList').innerHTML = `
         <div style="text-align:center;padding:22px 6px">
           <div style="font-size:15px;font-weight:650;margin-bottom:6px">${logged ? '登录态已失效' : '还没有登录'}</div>
@@ -2190,6 +2219,17 @@ async function loadAll() {
       if (bg) bg.onclick = openGuide;
       $('#orderCard').classList.add('hidden');
       $('#balNum').textContent = '—';
+      /* 账号三行就地清空：退出登录的按钮就在「我的」页账号卡里，确认完
+         用户还停在原页——不清屏幕的话旧姓名仍挂在上面，看起来像没退成。 */
+      $('#meName').textContent = '—';
+      $('#meId').textContent = '—';
+      $('#meSchool').textContent = '—';
+      /* 屏幕清了，内存也得清：订单里是验证码、记录是消费史、设置是别人的
+         限额，只清 DOM 的话切个页签又全回来了。与网页端同一处理。 */
+      state.orders = []; state.balance = null; state.settings = {};
+      rec.month = ''; rec.items = []; rec.total = 0; rec.count = 0; rec.page = 1;
+      rec.finished = true; rec.loading = false; rec.error = '登录后可查看用水记录'; rec.at = 0;
+      renderRec();
       $('#hName').textContent = greeting();
       $('#hSub').textContent = '';
       /* 掉回登录态时如果还停在设置里，等于停在一个空账号的设置页——先退回去 */

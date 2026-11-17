@@ -339,6 +339,9 @@ public class MainActivity extends android.app.Activity {
             cfg = new JSONObject();
             api.setConfig(cfg);
             login = null;
+            /* 通知栏/锁屏上的验证码是以明文挂在系统通知里的。不撤的话用户以为
+               退干净了，拿到手机的人仍能看到上一个账号的码（一直到日切才消失）。 */
+            cancelOrderCode();
             JSONObject o = new JSONObject();
             try {
                 o.put("ok", true);
