@@ -742,9 +742,9 @@ input[type=tel]::placeholder{color:var(--ink3)}
 
 <!-- 隐私政策模板：第一次启动的强制阅读弹层与「设置 → 隐私政策」共用同一份文本，用 template 存一次，初始化时克隆到两处，避免两处内容漂移。与「明文通知」有关的关键词用 .warn-red 标红。 -->
 <template id="policyTpl">
-  <!-- POLICY:BEGIN 本区由 tools/gen_policy.py 生成，勿手改 sha256=4eb47f148190 -->
+  <!-- POLICY:BEGIN 本区由 tools/gen_policy.py 生成，勿手改 sha256=bb5245720059 -->
   <div class="policy">
-    <p class="pmeta">政策版本 <strong>v5</strong> · 生效日期 <strong>2026-11-14</strong> · 适用版本 <strong>1.1.5 及以后</strong></p>
+    <p class="pmeta">政策版本 <strong>v6</strong> · 生效日期 <strong>2026-11-18</strong> · 适用版本 <strong>1.2.0 及以后</strong></p>
     <p>本政策说明「约澡」（下称「本应用」）如何处理你的信息、使用哪些第三方服务，以及你对自己信息享有的权利。</p>
 
     <h4>1. 适用范围</h4>
@@ -755,11 +755,12 @@ input[type=tel]::placeholder{color:var(--ink3)}
       <li>你主动提供：手机号、短信验证码（仅用于换取登录凭据，<strong>短信验证码不保存</strong>）</li>
       <li>平台返回：登录凭据 token、姓名、学校、学号、水控余额、预约订单、开阀验证码</li>
       <li>你创建的：星标楼栋、余额提醒阈值、通知与政策同意状态</li>
+      <li>设备画像：机型、系统版本、构建号，以及首次安装时随机生成、之后不变的设备 ID——它们随登录与业务请求一并发往水控平台，让平台把多次登录识别为同一台设备（不是硬件标识符，卸载即失效）</li>
       <li>设备与网络：版本号、系统版本、请求时间与结果（用于版本检查与排障）</li>
     </ul>
 
     <h4>3. 我们不收集的信息</h4>
-    <p>身份证号、精确位置、通讯录、短信内容、相册、IMEI / OAID 等设备标识符、广告标识。本应用不接入广告、统计、崩溃收集或支付 SDK，不出售、不出租、不交换你的个人信息。</p>
+    <p>身份证号、精确位置、通讯录、短信内容、相册、IMEI / OAID / Android ID 等硬件或系统标识符（本应用自己生成的随机设备 ID 不属于此类）、广告标识。本应用不接入广告、统计、崩溃收集或支付 SDK，不出售、不出租、不交换你的个人信息。</p>
 
     <h4>4. 处理目的与依据</h4>
     <p>登录与取码、展示余额与订单、发送取码通知 —— 属履行你请求的服务所必需；版本检查 —— 属保障功能与安全。本应用不做使用统计，不将信息用于广告或用户画像。</p>
@@ -1579,7 +1580,7 @@ function setStar(v) {
    1.2.0 起版本号不再写死在这里：内置一份（离线兜底），启动后从官网拉
    policy.json，远程版本更高就以远程为准（见下方「隐私政策的联网更新」）。
    同意记录永远跟着【当前生效版本】比对，热更新的只是文本，不是同意。 */
-const DISC_VER = '5';   /* 由 tools/gen_policy.py 从 site/policy.json 同步，勿手改 */
+const DISC_VER = '6';   /* 由 tools/gen_policy.py 从 site/policy.json 同步，勿手改 */
 /* 当前生效版本。初始等于内置版本，装上远程新版后变大；所有同意判断都用它。 */
 let __policyVer = DISC_VER;
 let __policyMeta = null;   /* { ver, date, summary }：远程版本自带的元信息 */

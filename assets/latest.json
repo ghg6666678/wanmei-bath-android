@@ -1,12 +1,12 @@
 {
-  "version": "1.1.5",
-  "versionCode": 58,
-  "publishedAt": "2026-11-12T15:55:00Z",
-  "notes": "自 1.1.4 以来的全部改动：\n- 隐私政策同步 v2：新增第 16 节（官网反馈表单）、第 15 节补上官网反馈渠道；条文变了，更新后首次启动需重读政策\n- 新增「设置 → 应用 → 问题反馈」：不用 GitHub 账号直接留言\n- 检查更新接入官网：安装包与版本清单都能从官网获取（国内通常最快），下载地址按实测延迟自动挑最快\n- 修复更新日志可左右滑动造成偏移\n- 设置「项目主页」改为「官网」，GitHub 源码入口移到官网页脚",
-  "apkName": "zhishui-1.1.5.apk",
+  "version": "1.2.0",
+  "versionCode": 59,
+  "publishedAt": "2026-11-17T16:45:00Z",
+  "notes": "自 1.1.5 以来的全部改动：\n- 隐私政策升 v6：登录与业务请求会向水控平台上报真实机型、系统版本、构建号与本机设备 ID（此前登录 UA 写死为一台 2020 年的华为，与请求体自相矛盾）；更新后首次启动需重新读一遍政策\n- 断网、超时、公共 Wi-Fi 认证页一律说人话（「网络未连接」「网络不太稳定」），不再把英文异常丢到屏幕上；已经有数据时刷新失败不会清空，同一种失败只提示一次\n- 新增「设置 → 应用 → 诊断信息」：版本、设备、网络能力、登录态与最近事件，点「复制」可直接贴进反馈；诊断日志落盘，重启与闪退后仍留痕\n- 检查更新：下载列表只显示通道与实测延迟，排第一的就是真正会用到的那条；「官网直下」补回国内直连\n- 退出登录彻底清空账号信息（「我的」页、内存里的身份、订单记录，并撤销锁屏验证码通知）\n- 登录框预填改用本机记住的号码：服务端只下发掩码手机号，完整号码不再离开你的手机\n- 登录设备身份统一：登录 UA 与请求体描述同一台手机，同一账号不再像在两台设备之间来回切换\n- 隐私政策按端拆分：官网分 Android 与网页端两份，应用内政策链接一律交给系统浏览器打开",
+  "apkName": "yuezao-1.2.0.apk",
   "mirrors": [
-    "https://yuezao.org/zhishui-1.1.5.apk",
-    "https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk",
-    "https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.1.5/release/zhishui-1.1.5.apk"
+    "https://yuezao.org/yuezao-1.2.0.apk",
+    "https://cdn.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.2.0/release/yuezao-1.2.0.apk",
+    "https://gcore.jsdelivr.net/gh/ghg6666678/wanmei-bath-android@v1.2.0/release/yuezao-1.2.0.apk"
   ]
 }

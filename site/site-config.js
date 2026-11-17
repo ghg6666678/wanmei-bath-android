@@ -4,15 +4,15 @@ window.SITE = {
   name: '约澡',
   repo: 'ghg6666678/wanmei-bath-android',
   latest: {
-    version: '1.1.5',
-    versionCode: 58,
-    sizeBytes: 103315,
-    date: '2026-11-12',
-    apkName: 'zhishui-1.1.5.apk',
-    tag: 'v1.1.5',
+    version: '1.2.0',
+    versionCode: 59,
+    sizeBytes: 127891,
+    date: '2026-11-18',
+    apkName: 'yuezao-1.2.0.apk',
+    tag: 'v1.2.0',
     /* 本站直下：构建时把 APK 复制到 site/ 根目录，下载按钮直接用相对路径。
        对已打开本站的人（已拿到分享码 cookie）是最快的一条路。 */
-    localPath: 'zhishui-1.1.5.apk'
+    localPath: 'yuezao-1.2.0.apk'
   },
   /* 政策版本不在这里：它只有一份，在 site/policy.json 的 ver/date 里。
      官网 privacy-android.html 与应用内文本都由 tools/gen_policy.py 从那里生成，
