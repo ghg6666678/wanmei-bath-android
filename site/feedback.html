@@ -109,35 +109,19 @@
   </div>
 </footer>
 
-<!-- 云服务 SDK（CDN 形式，本站没有构建步骤） -->
-<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
 <script src="site-config.js"></script>
 <script>
+/* 提交走同源 /fb，由边缘 Worker 转发到反馈库。
+   不再从 CDN 加载云服务 SDK：云服务的 key 绑定发布域名的精确 Origin，
+   yuezao.org 直连会被 403（the request origin is not allowed for this client）。
+   同源中转还顺带少了一个第三方脚本。 */
 (function () {
   var S = window.SITE || {};
   var L = S.latest || {};
 
-  /* 云端配置：endpoint / publishableKey 全部来自激活时返回的 publicConfig，
-     不写死、不从 location 推导。 */
-  var PUBLIC_CONFIG = {
-    endpoint: 'https://zhishui-site.app.workbuddy.host',
-    oauthRelayBaseUrl: 'https://www.workbuddy.cn/v2/as/genie-baas/oauth',
-    publishableKey: 'wbpk_TqUzuRkO7rbqBIQnQmlleM_mREdrABP0Nt9qaKtSyqvDi5o7kf85UGD'
-  };
-
   var $ = function (id) { return document.getElementById(id); };
   var kind = 'issue';
   var busy = false;
-
-  /* 初始化一次，整页复用 */
-  var cloud = null;
-  try {
-    if (window.WorkBuddyCloud && window.WorkBuddyCloud.createWorkBuddyCloud) {
-      cloud = window.WorkBuddyCloud.createWorkBuddyCloud(PUBLIC_CONFIG);
-    }
-  } catch (e) {
-    cloud = null;
-  }
 
   function setMsg(text, kindCls) {
     var el = $('fbMsg');
@@ -179,6 +163,20 @@
     $('content').focus();
   });
 
+  function unlock(submitText) {
+    busy = false;
+    $('fbSubmit').disabled = false;
+    $('fbSubmit').textContent = submitText || '提交反馈';
+  }
+
+  /* 服务端错误码 → 人话。文案不暴露内部实现，但要说清楚下一步怎么做。 */
+  function explain(code) {
+    if (code === 'content_too_short') return '内容再具体一点：至少 10 个字，才够判断问题出在哪。';
+    if (code === 'content_too_long') return '内容超过 2000 字，请精简后再提交。';
+    if (code === 'too_large') return '提交的内容太大了，请精简后再试。';
+    return '';
+  }
+
   $('fbForm').addEventListener('submit', function (e) {
     e.preventDefault();
     if (busy) return;
@@ -195,53 +193,58 @@
       setMsg('内容超过 2000 字，请精简后再提交。', 'err');
       return;
     }
-    if (!cloud) {
-      setMsg('云服务没能加载（可能是网络拦截了 SDK）。可以刷新重试，或改用上面的 GitHub Issues。', 'err');
-      return;
-    }
 
     busy = true;
     $('fbSubmit').disabled = true;
     $('fbSubmit').textContent = '提交中…';
     setMsg('');
 
-    /* 不链 .select()：这张表对前端没有读权限，插入成功与否看 error 即可 */
-    cloud.database.from('feedback').insert({
-      kind: kind,
-      content: content,
-      contact: contact || null,
-      app_version: L.version || null,
-      page: (document.referrer && document.referrer.indexOf(location.host) >= 0) ? 'referrer' : 'direct',
-      ua: (navigator.userAgent || '').slice(0, 300)
+    fetch('/fb', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: kind,
+        content: content,
+        contact: contact,
+        app_version: L.version || null
+      })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        return { status: r.status, body: j || {} };
+      });
     }).then(function (res) {
-      busy = false;
-      $('fbSubmit').disabled = false;
-      $('fbSubmit').textContent = '提交反馈';
+      var b = res.body;
 
-      if (res && res.error) {
-        var code = res.error.code ? String(res.error.code) : '';
-        if (code === '42501') {
-          setMsg('提交被服务端拒绝（权限策略）。这是本页的配置问题，不是你的输入有问题——请改用 GitHub Issues，或稍后再试。', 'err');
-        } else if (code === '23514') {
-          setMsg('内容长度不符合要求：正文需在 5–2000 字之间。', 'err');
-        } else if (code === '42P01') {
-          setMsg('反馈表还没准备好（服务端缺表）。请改用 GitHub Issues 反馈。', 'err');
-        } else {
-          setMsg('提交失败：' + (res.error.message || '未知错误') + '。可以重试，或改用 GitHub Issues。', 'err');
-        }
+      if (res.status === 200 && b.ok) {
+        unlock();
+        $('formWrap').hidden = true;
+        $('doneWrap').hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
 
-      $('formWrap').hidden = true;
-      $('doneWrap').hidden = false;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      var known = explain(b.error);
+      if (known) {
+        setMsg(known, 'err');
+        unlock();
+        return;
+      }
+
+      if (res.status === 413) {
+        setMsg('提交的内容太大了，请精简后再试。', 'err');
+      } else if (res.status >= 500) {
+        setMsg('反馈服务这会儿没接住（服务端 ' + res.status + '）。可以稍后重试，或改用上面的 GitHub Issues。', 'err');
+      } else if (res.status === 400) {
+        setMsg('这条没能提交成功：' + (b.message || '请求被拒绝') + '。请检查内容后重试，或改用 GitHub Issues。', 'err');
+      } else {
+        setMsg('提交失败：' + (b.message || ('HTTP ' + res.status)) + '。可以重试，或改用 GitHub Issues。', 'err');
+      }
+      unlock();
     }).catch(function (err) {
-      busy = false;
-      $('fbSubmit').disabled = false;
-      $('fbSubmit').textContent = '提交反馈';
       /* 网络层失败（离线、跨域被拦、代理掐断）也必须有明确提示 */
       setMsg('网络没能把反馈送出去：' + ((err && err.message) ? err.message : '请求失败') +
              '。请检查网络后重试，或改用 GitHub Issues。', 'err');
+      unlock();
     });
   });
 
