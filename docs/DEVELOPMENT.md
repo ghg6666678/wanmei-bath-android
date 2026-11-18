@@ -21,7 +21,7 @@
 | 目标系统 | 完美校园 | 只与国内上游直接对话 |
 
 - **红线**：与完美校园直接对话的那一层不能搬进 Cloudflare，否则出站变成境外 PoP，登录 IP 会被判异常。「以后把所有网页迁到 Workers / GitHub Pages」只落实了静态部分，业务层留在国内是设计，不是遗留。
-- **分享码**：公开域名全链路不需要；只有直连上游才要，且由 Worker 的 `proxy()` 自动补。APK 的更新链路用两条官网地址：`zhishui-site.app.workbuddy.host`（国内直连，带码，排第一）与 `yuezao.org`（边缘直出，裸链）——前者是「不绕出境」的那条，见 12.34。
+- **分享码**：公开域名全链路不需要；只有直连上游才要，且由 Worker 的 `proxy()` 自动补。APK 的更新链路用两条官网地址：`zhishui-site.app.workbuddy.host`（国内直连，带码，排第一）与 `yuezao.org`（边缘直出，裸链）——前者是「不绕出境」的那条，见 12.34。官网下载区同理（2026-11-18 重排）：「国内直下」主按钮直接指向带码上游链接（分享码因此公开在页面里，与客户端常量同源，本就不作密钥），「本站直下」走 yuezao.org 裸链作备用。
 - **部署**：官网静态与网页端外壳 → `cd web-app/cloudflare && node build-assets.mjs && npx wrangler deploy`；上游 Python 服务 → `web-app/README.md`。
 - **隐私政策**：Android 与网页端各一份，源分别是 `site/policy.json` 与 `site/policy-web.json`。官网 `privacy.html` 是分流入口，`privacy-android.html` / `privacy-web.html` 各承载一份完整正文；`python tools/gen_policy.py` 一次生成全部产物并校验网页端应用内模板，构建与部署前都有组合指纹校验（见第 16 章）。
 
