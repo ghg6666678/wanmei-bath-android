@@ -1,11 +1,13 @@
 # 构建产物
 build/
 
-# 签名私钥，切勿提交
-keystore/
+# 签名私钥。例外：正式证书 keystore/bath.keystore 随仓库提交（2026-11-19 换签
+# 事故后改为入库——证书只存在于仓库外时，任何一次换目录构建都会静默换签）。
+keystore/*
 *.keystore
 *.jks
 *.p12
+!keystore/bath.keystore
 
 # 本地环境
 .env

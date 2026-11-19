@@ -58,7 +58,7 @@ bash tools/build.sh                                          # 产物 build/bath
 python tools/audit_apk.py --config ../web-app/config.json      # 可选：自检不含个人信息
 ```
 
-首次构建会生成签名证书 `keystore/bath.keystore`（已 gitignore，默认密码 `bath123`，可用 `KEYSTORE_PASS` 覆盖）。**证书不要提交、也不要弄丢**，否则无法覆盖安装。
+签名证书 `keystore/bath.keystore` **随仓库提交**（2026-11-19 起；默认密码 `bath123`，可用 `KEYSTORE_PASS` 覆盖）。证书决定能否覆盖安装：证书缺失时 build.sh 会**报错退出**，不会静默生成新证书——1.2.0 曾因证书只在仓库外被自动换签，老用户覆盖安装全部签名冲突（详见 docs/DEVELOPMENT.md 12.42）。
 
 > Android 版与网页版界面各自维护（一端走 `fetch`、一端走原生桥），改动需分别在两端进行。
 

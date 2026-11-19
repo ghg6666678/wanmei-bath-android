@@ -11,6 +11,7 @@
 #   ANDROID_BUILD_TOOLS    build-tools 目录，例如 $ANDROID_SDK/build-tools/34.0.0
 #   ANDROID_PLATFORM       platform 目录，1.1.3.14 起【必须是 android-36 或更高】
 #   KEYSTORE_PASS          签名密码（默认 bath123，仅自用）
+#   KEYSTORE_ALLOW_GEN     =1 才允许在证书缺失时生成新证书（默认报错退出，防静默换签）
 #
 # 为什么要求 36：MainActivity 直接调用 Notification.Builder.setShortCriticalText /
 # Notification.FLAG_PROMOTED_ONGOING / NotificationManager.canPostPromotedNotifications
@@ -105,12 +106,24 @@ echo "[6/6] 对齐与签名"
 
 KS="$ROOT/keystore/bath.keystore"
 PASS="${KEYSTORE_PASS:-bath123}"
+# 正式证书随仓库提交（.gitignore 放行 keystore/bath.keystore）。
+# 2026-11-19 事故：证书原本只存在于临时构建目录里（gitignore 掉了），某次
+# 直接在仓库里构建时本脚本静默 keytool -genkeypair 生成了一把新证书，
+# 1.2.0 就这样被换签，全体老用户覆盖安装全部签名冲突。
+# 从此：证书缺失 = 构建失败，绝不静默生成。
 mkdir -p "$ROOT/keystore"
 if [ ! -f "$KS" ]; then
-  echo "  生成签名证书（仅首次）"
-  keytool -genkeypair -keystore "$KS" -alias bath -keyalg RSA -keysize 2048 \
-    -validity 10000 -storepass "$PASS" -keypass "$PASS" \
-    -dname "CN=Bath Helper, OU=Self, O=Self, L=Beijing, ST=Beijing, C=CN" 2>&1 | tail -2
+  if [ "${KEYSTORE_ALLOW_GEN:-}" = "1" ]; then
+    echo "  KEYSTORE_ALLOW_GEN=1：生成全新证书（与所有已发布版本签名冲突，仅限真正的首版）"
+    keytool -genkeypair -keystore "$KS" -alias bath -keyalg RSA -keysize 2048 \
+      -validity 10000 -storepass "$PASS" -keypass "$PASS" \
+      -dname "CN=Bath Helper, OU=Self, O=Self, L=Beijing, ST=Beijing, C=CN" 2>&1 | tail -2
+  else
+    echo "错误：找不到签名证书 $KS" >&2
+    echo "  证书已随仓库提交，先 git checkout 还原该文件；脚本不会再静默生成" >&2
+    echo "  新证书（那会与所有已安装版本签名冲突）。确属全新首版才用 KEYSTORE_ALLOW_GEN=1。" >&2
+    exit 1
+  fi
 fi
 
 "$BT/apksigner.bat" sign --ks "$KS" --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
